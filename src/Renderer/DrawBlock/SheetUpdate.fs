@@ -31,7 +31,7 @@ let updateBoundingBoxes (model: Model) =
 
 /// Update Function
 let update (msg : Msg) (issieModel : ModelType.Model): ModelType.Model*Cmd<ModelType.Msg> =
-    /// In this module model = Sheet model
+    /// In this module model = TestDrawBlock.Asserts model
     let model = issieModel.Sheet
 
     /// check things that might not have been correctly completed in the last update and if so do them
@@ -908,6 +908,4 @@ let init () =
         DebugDevice = None
         ScalingBox = None
     }, (Cmd.none: Cmd<ModelType.Msg>)
-
-
 

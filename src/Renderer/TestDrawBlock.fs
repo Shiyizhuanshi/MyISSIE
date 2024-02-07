@@ -184,13 +184,39 @@ module HLPTick3 =
         let placeSymbol (symLabel: string) (compType: ComponentType) (position: XYPos) (model: SheetT.Model) : Result<SheetT.Model, string> =
             let symLabel = String.toUpper symLabel // make label into its standard casing
             let symModel, symId = SymbolUpdate.addSymbol [] (model.Wire.Symbol) position compType symLabel
+
+
+            //randomly rotate and flip symbol here
+
+            //extract sym here
             let sym = symModel.Symbols[symId]
+            let symRotate90 = SymbolResizeHelpers.rotateSymbol CommonTypes.Degree90
+
+            //as only rotate 90 and 270 work well, 0 and 180 do not,
+            //divide each roation into several 90 rotations
+            let symRotate = 
+                match randomRotateDegree (getRandomValue ()) with
+                | Degree0 -> id
+                | Degree90 -> symRotate90
+                | Degree180 -> symRotate90 >> symRotate90
+                | Degree270 -> symRotate90 >> symRotate90 >> symRotate90
+
+            //FlipHorizontal does not work so let assume there is onlt FlipVertical and id
+            let symFlip =
+                match getRandomValue () with
+                | 0 | 1 -> id
+                | _ -> SymbolResizeHelpers.flipSymbol DrawModelType.SymbolT.FlipVertical
+
+            //replace sym with rotateOrFlipSym
+            let newSymModel =
+                SymbolUpdate.updateSymbol (symRotate>>symFlip) symId symModel
+
             match position + sym.getScaledDiagonal with
             | {X=x;Y=y} when x > maxSheetCoord || y > maxSheetCoord ->
                 Error $"symbol '{symLabel}' position {position + sym.getScaledDiagonal} lies outside allowed coordinates"
             | _ ->
                 model
-                |> Optic.set symbolModel_ symModel
+                |> Optic.set symbolModel_ newSymModel
                 |> SheetUpdate.updateBoundingBoxes // could optimise this by only updating symId bounding boxes
                 |> Ok
 
@@ -331,15 +357,24 @@ module HLPTick3 =
         let sample = fromList [-100.0..20.0..100.0]
         product (fun n m -> middleOfSheet + {X=n; Y= m}) sample sample
 
-    let rectangleWithoutOverlap =
+    let randomPosition =
+        let sample = randomInt -100.0 20.0 100.0
+        product (fun n m -> middleOfSheet + {X=n; Y= m}) sample sample
+        
+
+
+    //this will filter out all data that has symbol overlap
+    let filterOverlap (samples : Gen<'a>)=
         let filterFunc n =
             let sym1 = Symbol.createNewSymbol [] n  (GateN(And,2)) "G1" SymbolT.Colourful
             let sym2 = Symbol.createNewSymbol [] n DFF "FF1" SymbolT.Colourful
-            let sym1BoundingBox = Symbol.getSymbolBoundingBox sym1
-            let sym2BoundingBox = Symbol.getSymbolBoundingBox sym2
-            if  BlockHelpers.overlap2DBox sym1BoundingBox sym2BoundingBox then false
+            if  BlockHelpers.overlap2DBox (Symbol.getSymbolBoundingBox sym1) (Symbol.getSymbolBoundingBox sym2)
+            then false
             else true
-        filter (fun x -> filterFunc x)  rectanglePositions
+        filter (fun x -> filterFunc x)  samples
+
+
+        
 
     /// demo test circuit consisting of a DFF & And gate
     let makeTest1Circuit (andPos:XYPos) =
@@ -350,8 +385,6 @@ module HLPTick3 =
         |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
         |> getOkOrFail
         |> separateAllWires
-
-
 
 //------------------------------------------------------------------------------------------------//
 //-------------------------Example assertions used to test sheets---------------------------------//
@@ -461,7 +494,7 @@ module HLPTick3 =
 
         let test5 testNum firstSample dispatch =
             runTestOnSheets
-                "Horizontally positioned AND + DFF: fail all tests"
+                "Rectangle positioned AND + DFF: fail all tests"
                 firstSample
                 rectanglePositions
                 makeTest1Circuit
@@ -471,21 +504,31 @@ module HLPTick3 =
 
         let test6 testNum firstSample dispatch =
             runTestOnSheets
-                "7: place the snd component around anywhere of the fst component"
+                "Rectangle positioned with filtered data should pass all overlap tests"
                 firstSample
-                rectanglePositions
+                (filterOverlap rectanglePositions)
                 makeTest1Circuit
-                Asserts.failOnAllTests
+                Asserts.failOnSymbolIntersectsSymbol
                 dispatch
             |> recordPositionInTest testNum dispatch
 
         let test7 testNum firstSample dispatch =
             runTestOnSheets
-                "7: place the snd component around anywhere of the fst component"
+                "random position fail on all tests"
                 firstSample
-                rectangleWithoutOverlap
+                randomPosition
                 makeTest1Circuit
-                Asserts.failOnSymbolIntersectsSymbol
+                Asserts.failOnAllTests
+                dispatch
+            |> recordPositionInTest testNum dispatch
+
+        let test8 testNum firstSample dispatch =
+            runTestOnSheets
+                "random position failOnWireIntersectsSymbol"
+                firstSample
+                randomPosition
+                makeTest1Circuit
+                Asserts.failOnWireIntersectsSymbol
                 dispatch
             |> recordPositionInTest testNum dispatch
 
@@ -503,7 +546,7 @@ module HLPTick3 =
                 "Test5", test5 // dummy test - delete line or replace by real test as needed
                 "Test6", test6
                 "Test7", test7
-                "Test8", fun _ _ _ -> printf "Test8"
+                "Test8", test8
                 "Next Test Error", fun _ _ _ -> printf "Next Error:" // Go to the nexterror in a test
 
             ]

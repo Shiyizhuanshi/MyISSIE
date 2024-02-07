@@ -174,12 +174,6 @@ module HLPTick3 =
     module Builder =
 
 
-                
-
-            
-
-
-
         /// Place a new symbol with label symLabel onto the Sheet with given position.
         /// Return error if symLabel is not unique on sheet, or if position is outside allowed sheet coordinates (0 - maxSheetCoord).
         /// To be safe place components close to (maxSheetCoord/2.0, maxSheetCoord/2.0).
@@ -199,8 +193,6 @@ module HLPTick3 =
                 |> Optic.set symbolModel_ symModel
                 |> SheetUpdate.updateBoundingBoxes // could optimise this by only updating symId bounding boxes
                 |> Ok
-        
-
 
     
         /// Place a new symbol onto the Sheet with given position and scaling (use default scale if this is not specified).
@@ -301,6 +293,8 @@ module HLPTick3 =
             (sheetChecker: int -> SheetT.Model -> string option)
             (dispatch: Dispatch<Msg>)
                 : TestResult<'a> =
+
+            
             let generateAndCheckSheet n = sheetMaker >> sheetChecker n
             let result =
                 {
@@ -335,7 +329,17 @@ module HLPTick3 =
 
     let rectanglePositions =
         let sample = fromList [-100.0..20.0..100.0]
-        product (fun n m -> middleOfSheet + {X=n; Y=float m}) sample sample
+        product (fun n m -> middleOfSheet + {X=n; Y= m}) sample sample
+
+    let rectangleWithoutOverlap =
+        let filterFunc n =
+            let sym1 = Symbol.createNewSymbol [] n  (GateN(And,2)) "G1" SymbolT.Colourful
+            let sym2 = Symbol.createNewSymbol [] n DFF "FF1" SymbolT.Colourful
+            let sym1BoundingBox = Symbol.getSymbolBoundingBox sym1
+            let sym2BoundingBox = Symbol.getSymbolBoundingBox sym2
+            if  BlockHelpers.overlap2DBox sym1BoundingBox sym2BoundingBox then false
+            else true
+        filter (fun x -> filterFunc x)  rectanglePositions
 
     /// demo test circuit consisting of a DFF & And gate
     let makeTest1Circuit (andPos:XYPos) =
@@ -345,6 +349,7 @@ module HLPTick3 =
         |> Result.bind (placeWire (portOf "G1" 0) (portOf "FF1" 0))
         |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
         |> getOkOrFail
+        |> separateAllWires
 
 
 
@@ -458,7 +463,7 @@ module HLPTick3 =
             runTestOnSheets
                 "Horizontally positioned AND + DFF: fail all tests"
                 firstSample
-                VertiLinePositions
+                rectanglePositions
                 makeTest1Circuit
                 Asserts.failOnWireIntersectsSymbol
                 dispatch
@@ -471,6 +476,16 @@ module HLPTick3 =
                 rectanglePositions
                 makeTest1Circuit
                 Asserts.failOnAllTests
+                dispatch
+            |> recordPositionInTest testNum dispatch
+
+        let test7 testNum firstSample dispatch =
+            runTestOnSheets
+                "7: place the snd component around anywhere of the fst component"
+                firstSample
+                rectangleWithoutOverlap
+                makeTest1Circuit
+                Asserts.failOnSymbolIntersectsSymbol
                 dispatch
             |> recordPositionInTest testNum dispatch
 
@@ -487,7 +502,7 @@ module HLPTick3 =
                 "Test4", test4 
                 "Test5", test5 // dummy test - delete line or replace by real test as needed
                 "Test6", test6
-                "Test7", fun _ _ _ -> printf "Test7"
+                "Test7", test7
                 "Test8", fun _ _ _ -> printf "Test8"
                 "Next Test Error", fun _ _ _ -> printf "Next Error:" // Go to the nexterror in a test
 

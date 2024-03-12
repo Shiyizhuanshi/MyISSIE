@@ -1,7 +1,7 @@
 ﻿module TestDrawBlock
 open GenerateData
 open Elmish
-
+open SheetBeautifyD1
 
 //-------------------------------------------------------------------------------------------//
 //--------Types to represent tests with (possibly) random data, and results from tests-------//
@@ -149,23 +149,21 @@ module HLPTick3 =
             | IsEven, BusWireT.Vertical | IsOdd, BusWireT.Horizontal -> {X=0.; Y=seg.Length}
             | IsEven, BusWireT.Horizontal | IsOdd, BusWireT.Vertical -> {X=seg.Length; Y=0.}
 
-        /// Return a list of segment vectors with 3 vectors coalesced into one visible equivalent
-        /// if this is possible, otherwise return segVecs unchanged.
-        /// Index must be in range 1..segVecs
-        let tryCoalesceAboutIndex (segVecs: XYPos list) (index: int)  =
-            if segVecs[index] =~ XYPos.zero
-            then
+        /// Return the list of segment vectors with 3 vectors coalesced into one visible equivalent
+        /// wherever this is possible
+        let rec coalesce (segVecs: XYPos list)  =
+            match List.tryFindIndex (fun segVec -> segVec =~ XYPos.zero) segVecs[1..segVecs.Length-2] with          
+            | Some zeroVecIndex ->
+                let index = zeroVecIndex + 1 // base index as it should be on full segVecs
                 segVecs[0..index-2] @
                 [segVecs[index-1] + segVecs[index+1]] @
                 segVecs[index+2..segVecs.Length - 1]
-            else
-                segVecs
-
+                |> coalesce
+            | None -> segVecs
+     
         wire.Segments
         |> List.mapi getSegmentVector
-        |> (fun segVecs ->
-                (segVecs,[1..segVecs.Length-2])
-                ||> List.fold tryCoalesceAboutIndex)
+        |> coalesce
 
 
 //------------------------------------------------------------------------------------------------------------------------//
@@ -209,7 +207,7 @@ module HLPTick3 =
 
             //replace sym with rotateOrFlipSym
             let newSymModel =
-                SymbolUpdate.updateSymbol (symRotate>>symFlip) symId symModel
+                SymbolUpdate.updateSymbol (id) symId symModel
 
             match position + sym.getScaledDiagonal with
             | {X=x;Y=y} when x > maxSheetCoord || y > maxSheetCoord ->
@@ -345,9 +343,15 @@ module HLPTick3 =
 
     open Builder
     /// Sample data based on 11 equidistant points on a horizontal line
+    
+    let test1pos =
+        // fromList [-100..20..100]
+        fromList [-100]
+        |> map (fun n -> middleOfSheet + {X=float n; Y= -10.0})
     let horizLinePositions =
-        fromList [-100..20..100]
-        |> map (fun n -> middleOfSheet + {X=float n; Y=0.})
+        // fromList [-100..20..100]
+        fromList [-100]
+        |> map (fun n -> middleOfSheet + {X=float n; Y= -100.0})
 
     let VertiLinePositions =
         fromList [-100..20..100]
@@ -373,18 +377,84 @@ module HLPTick3 =
             else true
         filter (fun x -> filterFunc x)  samples
 
+    let connectionIdToString (connectionId: ConnectionId) =
+        match connectionId with
+        | ConnectionId str -> str
 
+    // let test1Func  (model: SheetT.Model) : SheetT.Model=
+    //         printf "%s" "Wires: "
+    //         let wiresLst = 
+    //             model.Wire.Wires 
+    //             |> Helpers.mapValues 
+    //             |> Array.toList
+    //             |> List.filter (fun wire -> isParallelWire wire model)
+    //         printf "%d" wiresLst.Length
+    //         // wiresLst 
+    //         // |> List.map (fun wire -> BlockHelpers.getNonZeroAbsSegments wire)
+    //         // |> List.collect (fun segs -> segs |> List.map (fun seg -> seg.Start, seg.End))
+    //         // |> List.iter (fun pos -> printf "%s" (pXY (fst pos) + " " + pXY (snd pos)))
+    //         model
+    let test000Func  (model: SheetT.Model) : SheetT.Model=
+        printf "%s" "Wires: "
+        let wiresLst = 
+            model.Wire.Wires 
+            |> Helpers.mapValues 
+            |> Array.toList
+            |> List.collect (fun wire -> visibleSegments wire.WId model) 
+        wiresLst 
+        |> List.iter (fun pos -> printf "%s" (pXY pos))//(pXY (fst pos) + " " + pXY (snd pos)))
+        model
+
+    let test1Func  (model: SheetT.Model) : SheetT.Model=
+        let symLst = 
+            model.Wire.Symbol.Symbols
+            |> mapValuesToList
+            |> List.filter (fun sym -> 
+                match hasOnlyOneConnectedParallelWire model sym with
+                | Some seg -> 
+                    printf "%s" (pXY seg)
+                    hasOnlyOnePort sym 
+                | None -> false) 
+            // |> List.iter (fun x -> printf "%d" x)
+            // symLst
+            // |> List.iter (fun x -> printf "%d" x.Length)
+        printf "%d" symLst.Length
+
+        // let symLst = 
+        //     model.Wire.Symbol.Symbols
+        //     |> mapValuesToList
+        //     |> List.filter (fun sym -> isConnectedWithCertainWire parallelWire sym) 
+        //     // |> List.iter (fun x -> printf "%d" x)
+        // printf "%d" symLst.Length
+        model
+
+    let test2Func  (model: SheetT.Model) : SheetT.Model=
+        sheetAlignScale model
         
-
     /// demo test circuit consisting of a DFF & And gate
     let makeTest1Circuit (andPos:XYPos) =
         initSheetModel
-        |> placeSymbol "G1" (GateN(And,2)) andPos
-        |> Result.bind (placeSymbol "FF1" DFF middleOfSheet)
-        |> Result.bind (placeWire (portOf "G1" 0) (portOf "FF1" 0))
-        |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
+        |> placeSymbol "A" (Input1 (1, None)) (middleOfSheet + {X= -100.; Y= 0.})
+        |> Result.bind (placeSymbol "B1" DFF (middleOfSheet + {X= 0.; Y= -100.}))
+        //|> Result.bind (placeSymbol "B2" (Output (1)) (middleOfSheet + {X= 200.; Y= 20.}))
+        |> Result.bind (placeWire (portOf "A" 0) (portOf "B1" 0))
+        //|> Result.bind (placeWire (portOf "A" 0) (portOf "B2" 0))
+        //|> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
         |> getOkOrFail
         |> separateAllWires
+        |> test1Func
+
+    let makeTest2Circuit (andPos:XYPos) =
+        initSheetModel
+        |> placeSymbol "A" (Input1 (1, None)) (middleOfSheet + {X= -100.; Y= 0.})
+        |> Result.bind (placeSymbol "B1" DFF (middleOfSheet + {X= 0.; Y= -100.}))
+        //|> Result.bind (placeSymbol "B2" (Output (1)) (middleOfSheet + {X= 200.; Y= 20.}))
+        |> Result.bind (placeWire (portOf "A" 0) (portOf "B1" 0))
+        //|> Result.bind (placeWire (portOf "A" 0) (portOf "B2" 0))
+        //|> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
+        |> getOkOrFail
+        |> separateAllWires
+        |> test2Func
 
 //------------------------------------------------------------------------------------------------//
 //-------------------------Example assertions used to test sheets---------------------------------//
@@ -435,7 +505,6 @@ module HLPTick3 =
 //---------------------------------------------------------------------------------------//
 
     module Tests =
-
         /// Allow test errors to be viewed in sequence by recording the current error
         /// in the Issie Model (field DrawblockTestState). This contains all Issie persistent state.
         let recordPositionInTest (testNumber: int) (dispatch: Dispatch<Msg>) (result: TestResult<'a>) =
@@ -453,7 +522,7 @@ module HLPTick3 =
             runTestOnSheets
                 "Horizontally positioned AND + DFF: fail on sample 0"
                 firstSample
-                horizLinePositions
+                test1pos
                 makeTest1Circuit
                 (Asserts.failOnSampleNumber 0)
                 dispatch
@@ -465,8 +534,8 @@ module HLPTick3 =
                 "Horizontally positioned AND + DFF: fail on sample 10"
                 firstSample
                 horizLinePositions
-                makeTest1Circuit
-                (Asserts.failOnSampleNumber 10)
+                makeTest2Circuit
+                (Asserts.failOnSampleNumber 0)
                 dispatch
             |> recordPositionInTest testNum dispatch
 

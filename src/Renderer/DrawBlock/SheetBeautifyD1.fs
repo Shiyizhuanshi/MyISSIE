@@ -162,6 +162,9 @@ let sheetAlignScale (sheetModel: SheetT.Model)=
         printf "%s" "new position: "
         printfn "%s" (pXY sym.Pos))
             
+    let updateSymIdLst = 
+        updateSymsLst
+        |> List.map (fun sym -> sym.Id)
 
     let newSymModel =
         updateSymsLst
@@ -171,26 +174,29 @@ let sheetAlignScale (sheetModel: SheetT.Model)=
             let symModel = SymbolUpdate.replaceSymbol symModel sym symId 
             symModel) symModel
 
-    
-
     newSymModel.Symbols
     |> mapValuesToList
     |> List.iter (fun sym ->
             printf "%s" "new symModel positions: " 
             printfn "%s" (pXY sym.Pos))
-    
-    let newWireModel = 
-        updateModelSymbols wireModel (mapValuesToList newSymModel.Symbols) 
 
     let newParallelWiresLst = 
         parallelWiresLst
-        |> List.map (fun wire -> BusWireRoute.updateWire newWireModel wire false) 
-        |> List.map (fun wire -> wire.WId)
-    
+        // |> List.map (fun wire -> BusWireRoute.updateWire newWireModel wire false) 
+        |> List.map (fun wire -> BusWireRoute.updateWire sheetModel.Wire wire false )
+        // |> List.map (fun wire -> wire.WId)
+
+    let newWireModel = 
+        updateModelWires (updateModelSymbols wireModel (mapValuesToList newSymModel.Symbols) ) newParallelWiresLst 
+        // |> BusWireSeparate.updateWireSegmentJumpsAndSeparations newParallelWiresLst 
+
+    let newWireModel' = 
+        BusWireRoute.updateWires newWireModel updateSymIdLst { X = 0.0; Y = 0.0 } 
+
     let newSheetModel = 
         sheetModel
-        |> Optic.set SheetT.wire_ (BusWireSeparate.updateWireSegmentJumpsAndSeparations newParallelWiresLst newWireModel)
-        |> SheetUpdate.updateBoundingBoxes // could optimise this by only updating symId bounding boxes
+        |> Optic.set SheetT.wire_ (newWireModel')
+        // |> SheetUpdate.updateBoundingBoxes // could optimise this by only updating symId bounding boxes
         
     
     let newSymsLst = newSheetModel.Wire.Symbol.Symbols |> mapValuesToList

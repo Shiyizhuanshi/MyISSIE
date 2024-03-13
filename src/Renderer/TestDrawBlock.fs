@@ -434,10 +434,13 @@ module HLPTick3 =
     /// demo test circuit consisting of a DFF & And gate
     let makeTest1Circuit (andPos:XYPos) =
         initSheetModel
-        |> placeSymbol "A" (Input1 (1, None)) (middleOfSheet + {X= -100.; Y= 0.})
-        |> Result.bind (placeSymbol "B1" DFF (middleOfSheet + {X= 0.; Y= -100.}))
+        |> placeSymbol "A" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= -50.})
+        |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= 50.}))
+        |> Result.bind (placeSymbol"G1"(GateN(And,2))(middleOfSheet))
+        // |> Result.bind (placeSymbol "B1" DFF (middleOfSheet + {X= 0.; Y= -100.}))
         //|> Result.bind (placeSymbol "B2" (Output (1)) (middleOfSheet + {X= 200.; Y= 20.}))
-        |> Result.bind (placeWire (portOf "A" 0) (portOf "B1" 0))
+        |> Result.bind (placeWire (portOf "A" 0) (portOf "G1" 0))
+        |> Result.bind (placeWire (portOf "B" 0) (portOf "G1" 1))
         //|> Result.bind (placeWire (portOf "A" 0) (portOf "B2" 0))
         //|> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
         |> getOkOrFail
@@ -446,15 +449,19 @@ module HLPTick3 =
 
     let makeTest2Circuit (andPos:XYPos) =
         initSheetModel
-        |> placeSymbol "A" (Input1 (1, None)) (middleOfSheet + {X= -100.; Y= 0.})
-        |> Result.bind (placeSymbol "B1" DFF (middleOfSheet + {X= 0.; Y= -100.}))
+        |> placeSymbol "A" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= -50.})
+        |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= 50.}))
+        |> Result.bind (placeSymbol"G1"(GateN(And,2))(middleOfSheet))
+        // |> Result.bind (placeSymbol "B1" DFF (middleOfSheet + {X= 0.; Y= -100.}))
         //|> Result.bind (placeSymbol "B2" (Output (1)) (middleOfSheet + {X= 200.; Y= 20.}))
-        |> Result.bind (placeWire (portOf "A" 0) (portOf "B1" 0))
+        |> Result.bind (placeWire (portOf "A" 0) (portOf "G1" 0))
+        |> Result.bind (placeWire (portOf "B" 0) (portOf "G1" 1))
         //|> Result.bind (placeWire (portOf "A" 0) (portOf "B2" 0))
         //|> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
         |> getOkOrFail
         |> separateAllWires
         |> test2Func
+
 
 //------------------------------------------------------------------------------------------------//
 //-------------------------Example assertions used to test sheets---------------------------------//

@@ -250,14 +250,46 @@ module HLPTick3 =
                 placeSymbol symLabel (Custom ccType) position model
             
         
+        /// Rotate the symbol given by symLabel by an amount rotate.
+        /// Takes in a symbol label, a rotate fixed amount, and a sheet containing the symbol.
+        /// Return the sheet with the rotated symbol.
+        let rotateSymbol (symLabel: string) (rotate: Rotation) (model: SheetT.Model) : Result<SheetT.Model, string> =
 
-        // Rotate a symbol
-        let rotateSymbol (symLabel: string) (rotate: Rotation) (model: SheetT.Model) : (SheetT.Model) =
-            failwithf "Not Implemented"
+            let symbolsMap = model.Wire.Symbol.Symbols
+            let getSymbol = 
+                mapValues symbolsMap
+                |> Array.tryFind (fun sym -> caseInvariantEqual sym.Component.Label symLabel)
+                |> function | Some x -> Ok x | None -> Error "Can't find symbol with label '{symPort.Label}'"
 
-        // Flip a symbol
-        let flipSymbol (symLabel: string) (flip: SymbolT.FlipType) (model: SheetT.Model) : (SheetT.Model) =
-            failwithf "Not Implemented"
+            match getSymbol with
+            | Ok symbol ->
+                let rotatedSymbol = SymbolResizeHelpers.rotateSymbol rotate symbol
+                let updatedSymbolsMap = Map.add symbol.Id rotatedSymbol symbolsMap
+                { model with Wire = { model.Wire with Symbol = { model.Wire.Symbol with Symbols = updatedSymbolsMap } } }
+                |> Ok
+
+            | _ -> model |> Ok
+
+        /// Flip the symbol given by symLabel by an amount flip.
+        /// Takes in a symbol label, a flip fixed amount, and a sheet containing the symbol.
+        /// Return the sheet with the flipped symbol.
+        let flipSymbol (symLabel: string) (flip: SymbolT.FlipType) (model: SheetT.Model) : Result<SheetT.Model, string> =
+
+            let symbolsMap = model.Wire.Symbol.Symbols
+            let getSymbol =
+                mapValues symbolsMap
+                |> Array.tryFind (fun sym -> caseInvariantEqual sym.Component.Label symLabel)
+                |> function | Some x -> Ok x | None -> Error "Can't find symbol with label '{symPort.Label}'"
+
+            match getSymbol with
+            | Ok symbol ->
+                let flippedSymbol = SymbolResizeHelpers.flipSymbol flip symbol
+                let updatedSymbolsMap = Map.add symbol.Id flippedSymbol symbolsMap
+                { model with Wire = { model.Wire with Symbol = { model.Wire.Symbol with Symbols = updatedSymbolsMap } } }
+                |> Ok
+
+            | _ -> model |> Ok
+
 
         /// Add a (newly routed) wire, source specifies the Output port, target the Input port.
         /// Return an error if either of the two ports specified is invalid, or if the wire duplicates and existing one.
@@ -406,19 +438,19 @@ module HLPTick3 =
         model
 
     let test1Func  (model: SheetT.Model) : SheetT.Model=
-        let symLst = 
-            model.Wire.Symbol.Symbols
-            |> mapValuesToList
-            |> List.filter (fun sym -> 
-                match hasOnlyOneConnectedParallelWire model sym with
-                | Some seg -> 
-                    printf "%s" (pXY seg)
-                    hasOnlyOnePort sym 
-                | None -> false) 
-            // |> List.iter (fun x -> printf "%d" x)
-            // symLst
-            // |> List.iter (fun x -> printf "%d" x.Length)
-        printf "%d" symLst.Length
+        // let symLst = 
+        //     model.Wire.Symbol.Symbols
+        //     |> mapValuesToList
+        //     |> List.filter (fun sym -> 
+        //         match hasOnlyOneConnectedParallelWire model sym with
+        //         | Some seg -> 
+        //             printf "%s" (pXY seg)
+        //             hasOnlyOnePort sym 
+        //         | None -> false) 
+        //     // |> List.iter (fun x -> printf "%d" x)
+        //     // symLst
+        //     // |> List.iter (fun x -> printf "%d" x.Length)
+        // printf "%d" symLst.Length
 
         // let symLst = 
         //     model.Wire.Symbol.Symbols
@@ -435,13 +467,16 @@ module HLPTick3 =
     let makeTest1Circuit (andPos:XYPos) =
         initSheetModel
         |> placeSymbol"MUX"(Mux2) (middleOfSheet)
+        |> Result.bind (flipSymbol "MUX" SymbolT.FlipVertical)
         |> Result.bind (placeSymbol "A" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= -50.}))
-        |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= 50.}))
+        |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -50.; Y= -200.}))
+        // |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= 200.}))
         |> Result.bind (placeSymbol "C" (Output(1)) (middleOfSheet + {X= 200.; Y= -50.}))
+        |> Result.bind (rotateSymbol "B" Degree270)
         // |> Result.bind (placeSymbol "B1" DFF (middleOfSheet + {X= 0.; Y= -100.}))
         // |> Result.bind (placeSymbol "B2" (Output (1)) (middleOfSheet + {X= 200.; Y= 20.}))
         |> Result.bind (placeWire (portOf "A" 0) (portOf "MUX" 0))
-        |> Result.bind (placeWire (portOf "B" 0) (portOf "MUX" 1))
+        |> Result.bind (placeWire (portOf "B" 0) (portOf "MUX" 2))
         |> Result.bind (placeWire (portOf "MUX" 0) (portOf "C" 0) )
         // |> Result.bind (placeWire (portOf "A" 0) (portOf "B2" 0))
         // |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
@@ -450,15 +485,57 @@ module HLPTick3 =
         |> test1Func
 
     let makeTest2Circuit (andPos:XYPos) =
-        initSheetModel
+         initSheetModel
         |> placeSymbol"MUX"(Mux2) (middleOfSheet)
+        |> Result.bind (flipSymbol "MUX" SymbolT.FlipVertical)
         |> Result.bind (placeSymbol "A" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= -50.}))
-        |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= 50.}))
+        |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -50.; Y= -200.}))
+        // |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= 200.}))
         |> Result.bind (placeSymbol "C" (Output(1)) (middleOfSheet + {X= 200.; Y= -50.}))
+        |> Result.bind (rotateSymbol "B" Degree270)
         // |> Result.bind (placeSymbol "B1" DFF (middleOfSheet + {X= 0.; Y= -100.}))
         // |> Result.bind (placeSymbol "B2" (Output (1)) (middleOfSheet + {X= 200.; Y= 20.}))
         |> Result.bind (placeWire (portOf "A" 0) (portOf "MUX" 0))
-        |> Result.bind (placeWire (portOf "B" 0) (portOf "MUX" 1))
+        |> Result.bind (placeWire (portOf "B" 0) (portOf "MUX" 2))
+        |> Result.bind (placeWire (portOf "MUX" 0) (portOf "C" 0) )
+        // |> Result.bind (placeWire (portOf "A" 0) (portOf "B2" 0))
+        // |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
+        |> getOkOrFail
+        |> separateAllWires
+        |> test2Func
+    
+    let makeTest3Circuit (andPos:XYPos) =
+        initSheetModel
+        |> placeSymbol"MUX"(Mux2) (middleOfSheet)
+        // |> Result.bind (flipSymbol "MUX" SymbolT.FlipVertical)
+        |> Result.bind (placeSymbol "A" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= -50.}))
+        // |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -50.; Y= -200.}))
+        |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= 200.}))
+        |> Result.bind (placeSymbol "C" (Output(1)) (middleOfSheet + {X= 200.; Y= -50.}))
+        |> Result.bind (rotateSymbol "B" Degree90)
+        // |> Result.bind (placeSymbol "B1" DFF (middleOfSheet + {X= 0.; Y= -100.}))
+        // |> Result.bind (placeSymbol "B2" (Output (1)) (middleOfSheet + {X= 200.; Y= 20.}))
+        |> Result.bind (placeWire (portOf "A" 0) (portOf "MUX" 0))
+        |> Result.bind (placeWire (portOf "B" 0) (portOf "MUX" 2))
+        |> Result.bind (placeWire (portOf "MUX" 0) (portOf "C" 0) )
+        // |> Result.bind (placeWire (portOf "A" 0) (portOf "B2" 0))
+        // |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
+        |> getOkOrFail
+        |> separateAllWires
+        |> test1Func
+    let makeTest4Circuit (andPos:XYPos) =
+        initSheetModel
+        |> placeSymbol"MUX"(Mux2) (middleOfSheet)
+        // |> Result.bind (flipSymbol "MUX" SymbolT.FlipVertical)
+        |> Result.bind (placeSymbol "A" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= -50.}))
+        // |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -50.; Y= -200.}))
+        |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= 200.}))
+        |> Result.bind (placeSymbol "C" (Output(1)) (middleOfSheet + {X= 200.; Y= -50.}))
+        |> Result.bind (rotateSymbol "B" Degree90)
+        // |> Result.bind (placeSymbol "B1" DFF (middleOfSheet + {X= 0.; Y= -100.}))
+        // |> Result.bind (placeSymbol "B2" (Output (1)) (middleOfSheet + {X= 200.; Y= 20.}))
+        |> Result.bind (placeWire (portOf "A" 0) (portOf "MUX" 0))
+        |> Result.bind (placeWire (portOf "B" 0) (portOf "MUX" 2))
         |> Result.bind (placeWire (portOf "MUX" 0) (portOf "C" 0) )
         // |> Result.bind (placeWire (portOf "A" 0) (portOf "B2" 0))
         // |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
@@ -544,7 +621,7 @@ module HLPTick3 =
             runTestOnSheets
                 "Horizontally positioned AND + DFF: fail on sample 10"
                 firstSample
-                horizLinePositions
+                test1pos
                 makeTest2Circuit
                 (Asserts.failOnSampleNumber 0)
                 dispatch
@@ -555,9 +632,9 @@ module HLPTick3 =
             runTestOnSheets
                 "Horizontally positioned AND + DFF: fail on symbols intersect"
                 firstSample
-                horizLinePositions
-                makeTest1Circuit
-                Asserts.failOnSymbolIntersectsSymbol
+                test1pos
+                makeTest3Circuit
+                (Asserts.failOnSampleNumber 0)
                 dispatch
             |> recordPositionInTest testNum dispatch
 
@@ -566,9 +643,9 @@ module HLPTick3 =
             runTestOnSheets
                 "Horizontally positioned AND + DFF: fail all tests"
                 firstSample
-                horizLinePositions
-                makeTest1Circuit
-                Asserts.failOnAllTests
+                test1pos
+                makeTest4Circuit
+                (Asserts.failOnSampleNumber 0)
                 dispatch
             |> recordPositionInTest testNum dispatch
 

@@ -438,111 +438,54 @@ module HLPTick3 =
         model
 
     let test1Func  (model: SheetT.Model) : SheetT.Model=
-        // let symLst = 
-        //     model.Wire.Symbol.Symbols
-        //     |> mapValuesToList
-        //     |> List.filter (fun sym -> 
-        //         match hasOnlyOneConnectedParallelWire model sym with
-        //         | Some seg -> 
-        //             printf "%s" (pXY seg)
-        //             hasOnlyOnePort sym 
-        //         | None -> false) 
-        //     // |> List.iter (fun x -> printf "%d" x)
-        //     // symLst
-        //     // |> List.iter (fun x -> printf "%d" x.Length)
-        // printf "%d" symLst.Length
-
-        // let symLst = 
-        //     model.Wire.Symbol.Symbols
-        //     |> mapValuesToList
-        //     |> List.filter (fun sym -> isConnectedWithCertainWire parallelWire sym) 
-        //     // |> List.iter (fun x -> printf "%d" x)
-        // printf "%d" symLst.Length
-        model
-
-    let test2Func  (model: SheetT.Model) : SheetT.Model=
         sheetAlignScale model
         
+    let test2Func  (model: SheetT.Model) : SheetT.Model=
+        sheetAlignScale model
+    
     /// demo test circuit consisting of a DFF & And gate
     let makeTest1Circuit (andPos:XYPos) =
         initSheetModel
-        |> placeSymbol"MUX"(Mux2) (middleOfSheet)
-        |> Result.bind (flipSymbol "MUX" SymbolT.FlipVertical)
+        |> placeSymbol"MUX1"(Mux2) (middleOfSheet)
+        |> Result.bind (placeSymbol "MUX2" (Mux2) (middleOfSheet + {X= 100.; Y= 100.}))
         |> Result.bind (placeSymbol "A" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= -50.}))
-        |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -50.; Y= -200.}))
-        // |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= 200.}))
-        |> Result.bind (placeSymbol "C" (Output(1)) (middleOfSheet + {X= 200.; Y= -50.}))
-        |> Result.bind (rotateSymbol "B" Degree270)
-        // |> Result.bind (placeSymbol "B1" DFF (middleOfSheet + {X= 0.; Y= -100.}))
-        // |> Result.bind (placeSymbol "B2" (Output (1)) (middleOfSheet + {X= 200.; Y= 20.}))
-        |> Result.bind (placeWire (portOf "A" 0) (portOf "MUX" 0))
-        |> Result.bind (placeWire (portOf "B" 0) (portOf "MUX" 2))
-        |> Result.bind (placeWire (portOf "MUX" 0) (portOf "C" 0) )
-        // |> Result.bind (placeWire (portOf "A" 0) (portOf "B2" 0))
-        // |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
+        |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= 50.}))
+        |> Result.bind (placeSymbol "C" (Output 1) (middleOfSheet + {X= 200.; Y= -50.}))
+        |> Result.bind (placeSymbol "S1" (Input1 (1, None)) (middleOfSheet + {X= 50.; Y= 250.}))
+        |> Result.bind (placeSymbol "S2" (Input1 (1, None)) (middleOfSheet + {X= -150.; Y= 200.}))
+        |> Result.bind (rotateSymbol "S1" Degree90)
+        |> Result.bind (placeWire (portOf "A" 0) (portOf "MUX1" 0))
+        |> Result.bind (placeWire (portOf "B" 0) (portOf "MUX1" 1))
+        |> Result.bind (placeWire (portOf "MUX1" 0) (portOf "MUX2" 0))
+        |> Result.bind (placeWire (portOf "MUX2" 0) (portOf "C" 0) )
+        |> Result.bind (placeWire (portOf "S1" 0) (portOf "MUX1" 2) )
+        |> Result.bind (placeWire (portOf "S1" 0) (portOf "MUX2" 1) )
+        |> Result.bind (placeWire (portOf "S2" 0) (portOf "MUX2" 2) )
         |> getOkOrFail
         |> separateAllWires
-        |> test1Func
 
     let makeTest2Circuit (andPos:XYPos) =
-         initSheetModel
-        |> placeSymbol"MUX"(Mux2) (middleOfSheet)
-        |> Result.bind (flipSymbol "MUX" SymbolT.FlipVertical)
-        |> Result.bind (placeSymbol "A" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= -50.}))
-        |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -50.; Y= -200.}))
-        // |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= 200.}))
-        |> Result.bind (placeSymbol "C" (Output(1)) (middleOfSheet + {X= 200.; Y= -50.}))
-        |> Result.bind (rotateSymbol "B" Degree270)
-        // |> Result.bind (placeSymbol "B1" DFF (middleOfSheet + {X= 0.; Y= -100.}))
-        // |> Result.bind (placeSymbol "B2" (Output (1)) (middleOfSheet + {X= 200.; Y= 20.}))
-        |> Result.bind (placeWire (portOf "A" 0) (portOf "MUX" 0))
-        |> Result.bind (placeWire (portOf "B" 0) (portOf "MUX" 2))
-        |> Result.bind (placeWire (portOf "MUX" 0) (portOf "C" 0) )
-        // |> Result.bind (placeWire (portOf "A" 0) (portOf "B2" 0))
-        // |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
-        |> getOkOrFail
-        |> separateAllWires
+        makeTest1Circuit {X=0.; Y=0.}
         |> test2Func
     
     let makeTest3Circuit (andPos:XYPos) =
-        initSheetModel
-        |> placeSymbol"MUX"(Mux2) (middleOfSheet)
-        // |> Result.bind (flipSymbol "MUX" SymbolT.FlipVertical)
-        |> Result.bind (placeSymbol "A" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= -50.}))
-        // |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -50.; Y= -200.}))
-        |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= 200.}))
-        |> Result.bind (placeSymbol "C" (Output(1)) (middleOfSheet + {X= 200.; Y= -50.}))
-        |> Result.bind (rotateSymbol "B" Degree90)
-        // |> Result.bind (placeSymbol "B1" DFF (middleOfSheet + {X= 0.; Y= -100.}))
-        // |> Result.bind (placeSymbol "B2" (Output (1)) (middleOfSheet + {X= 200.; Y= 20.}))
-        |> Result.bind (placeWire (portOf "A" 0) (portOf "MUX" 0))
-        |> Result.bind (placeWire (portOf "B" 0) (portOf "MUX" 2))
-        |> Result.bind (placeWire (portOf "MUX" 0) (portOf "C" 0) )
-        // |> Result.bind (placeWire (portOf "A" 0) (portOf "B2" 0))
-        // |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
+        let model = initSheetModel
+        let canvas = model.GetCanvasState()
+        let ccType: CustomComponentType =
+            {
+                Name = "main1"
+                InputLabels = Extractor.getOrderedCompLabels (Input1 (0, None)) canvas
+                OutputLabels = Extractor.getOrderedCompLabels (Output 0) canvas
+                Form = None
+                Description = None
+            }
+        model
+        |> placeSymbol "A" (Custom ccType) (middleOfSheet + {X= -200.; Y= -50.})
         |> getOkOrFail
         |> separateAllWires
-        |> test1Func
     let makeTest4Circuit (andPos:XYPos) =
-        initSheetModel
-        |> placeSymbol"MUX"(Mux2) (middleOfSheet)
-        // |> Result.bind (flipSymbol "MUX" SymbolT.FlipVertical)
-        |> Result.bind (placeSymbol "A" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= -50.}))
-        // |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -50.; Y= -200.}))
-        |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= 200.}))
-        |> Result.bind (placeSymbol "C" (Output(1)) (middleOfSheet + {X= 200.; Y= -50.}))
-        |> Result.bind (rotateSymbol "B" Degree90)
-        // |> Result.bind (placeSymbol "B1" DFF (middleOfSheet + {X= 0.; Y= -100.}))
-        // |> Result.bind (placeSymbol "B2" (Output (1)) (middleOfSheet + {X= 200.; Y= 20.}))
-        |> Result.bind (placeWire (portOf "A" 0) (portOf "MUX" 0))
-        |> Result.bind (placeWire (portOf "B" 0) (portOf "MUX" 2))
-        |> Result.bind (placeWire (portOf "MUX" 0) (portOf "C" 0) )
-        // |> Result.bind (placeWire (portOf "A" 0) (portOf "B2" 0))
-        // |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
-        |> getOkOrFail
-        |> separateAllWires
+        makeTest3Circuit {X=0.; Y=0.}
         |> test2Func
-
 
 //------------------------------------------------------------------------------------------------//
 //-------------------------Example assertions used to test sheets---------------------------------//

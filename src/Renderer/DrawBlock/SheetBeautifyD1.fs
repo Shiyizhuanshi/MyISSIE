@@ -77,12 +77,14 @@ let isParallelWire (wire: BusWireT.Wire) (model: SheetT.Model): XYPos option=
                 | false -> None
         | _ -> None
 
-let hasOnlyOnePort (sym: Symbol) : bool= 
-    sym.PortMaps.Order 
-    |> Map.toList
-    |> List.map snd
-    |> List.map List.length
-    |> List.sum = 1
+let hasOnlyOnePort (sym: Symbol) : PortType option= 
+    match sym.Component.InputPorts.Length + sym.Component.OutputPorts.Length with
+    | 1 -> 
+        match sym.Component.InputPorts.Length with
+        | 1 -> Some PortType.Input
+        | 0 -> Some PortType.Output
+        | _ -> None
+    | _ -> None
 
 let inputPortIdToString (inputPortId: InputPortId) =
         match inputPortId with
@@ -92,7 +94,7 @@ let outputPortIdToString (outputPortId: OutputPortId) =
         match outputPortId with
         | OutputPortId str -> str
 
-let hasOnlyOneConnectedParallelWire (sheetModel: SheetT.Model) (sym: Symbol): XYPos option =
+let hasOnlyOneConnectedParallelWire (sheetModel: SheetT.Model) (sym: Symbol): XYPos option=
     let parallelWiresLst = 
         sheetModel.Wire.Wires 
         |> mapValuesToList 
@@ -128,6 +130,12 @@ let hasOnlyOneConnectedParallelWire (sheetModel: SheetT.Model) (sym: Symbol): XY
     | false -> None
 
 let negXYPos (pos: XYPos) : XYPos = {X = -pos.X; Y = -pos.Y}
+
+let chooseOffset (offset: XYPos) (portType: PortType): XYPos = 
+    match portType with
+    | PortType.Input -> negXYPos offset
+    | PortType.Output -> offset
+
 let sheetAlignScale (sheetModel: SheetT.Model)=
     let parallelWiresLst = 
         sheetModel.Wire.Wires 
@@ -144,18 +152,20 @@ let sheetAlignScale (sheetModel: SheetT.Model)=
     let wireModel = sheetModel.Wire
     let updateSymsLst=
         symsLst
-        |> List.filter (fun sym -> hasOnlyOnePort sym)
         |> List.collect (fun sym -> 
-            match hasOnlyOneConnectedParallelWire sheetModel sym with
-            | Some seg -> 
-                printfn "%s" "found a sym with a parallel wire:"
-                printfn "%s" (pXY sym.Pos)
-                [(sym, seg)]
-            | None -> [])
-        |> List.map (fun (sym, seg) -> 
+            match hasOnlyOnePort sym with
+                | Some portType -> 
+                    match hasOnlyOneConnectedParallelWire sheetModel sym with
+                    | Some seg -> 
+                        printfn "%s" "found a sym with a parallel wire:"
+                        printfn "%s" (pXY sym.Pos)
+                        [(sym, seg, portType)]
+                    | None -> []
+                | None -> [])
+        |> List.map (fun (sym: Symbol, offset, portType) -> 
             printf "%s" "old position: "
             printfn "%s" (pXY sym.Pos)
-            moveSymbol (seg) sym)
+            moveSymbol (chooseOffset offset portType) sym)
 
     updateSymsLst
     |> List.iter (fun sym -> 

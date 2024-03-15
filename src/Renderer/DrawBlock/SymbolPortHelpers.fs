@@ -143,7 +143,7 @@ let moveCustomPortsPopup() : ReactElement =
     br []; br []
     ul [Style [ListStyle "disc"; MarginLeft "30px"]]
         [
-            li [] [str "Normal components can be rotated and flipped to change port orientation, \
+            li [] [str "Normal components can be rotated and Flipped to change port orientation, \
                          however port positions cannot be changed."]
 
             li [] [ str "2-input MUX components can have 0 & 1 inputs swapped using properties."]

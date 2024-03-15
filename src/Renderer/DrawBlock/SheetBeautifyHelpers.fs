@@ -1,5 +1,3 @@
-(*This is the sample answer given by Tom Clarke, this version is used to avoid any merge conflicts from the Individual Stage
-Also we should expect this to be correct*)
 module SheetBeautifyHelpers
 
 open EEExtensions
@@ -99,7 +97,7 @@ let rotateSymbol (symLabel: string) (rotate: Rotation) (model: SheetT.Model) : (
 
 /// Flip the symbol given by symLabel by an amount flip.
 /// Takes in a symbol label, a flip fixed amount, and a sheet containing the symbol.
-/// Return the sheet with the flipped symbol.
+/// Return the sheet with the Flipped symbol.
 let flipSymbol (symLabel: string) (flip: SymbolT.FlipType) (model: SheetT.Model) : (SheetT.Model) =
 
     let symbolsMap = model.Wire.Symbol.Symbols
@@ -207,9 +205,9 @@ let symbol_rotation_ =
 
 //B8 RW
 /// A lens for accessing the flip state of a symbol.
-// let symbol_flipped_ =
-//     Lens.create (fun sym -> sym.STransform.Flipped)
-//                 (fun newState sym -> {sym with STransform = {sym.STransform with Flipped =newState}})
+let symbol_flipped_ =
+    Lens.create (fun sym -> sym.STransform.Flipped)
+                (fun newState sym -> {sym with STransform = {sym.STransform with Flipped =newState}})
 
 
 //----------------------------------------------------------------------------------------------//
@@ -516,3 +514,10 @@ let findRetracingSegments (model : SheetT.Model) =
     {| RetraceSegs =retracingSegs;
        RetraceSegsInSymbol = retracingSegsInsideSymbol|}
     
+
+let getVisibleSegmentCount (model: SheetT.Model) =
+    let allWires = model.Wire.Wires
+                   |> Map.values
+                   |> Array.toList
+    allWires
+    |> List.sumBy (fun wire -> visibleSegments wire.WId model |> List.length)

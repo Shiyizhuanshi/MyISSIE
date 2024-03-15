@@ -206,7 +206,7 @@ let update (msg : Msg) (issieModel : ModelType.Model) : ModelType.Model*Cmd<Mode
 
     | UpdateSymbolWires compId ->
         // update all the wires coming from a single symbol
-        // useful if the symbol has been flipped or ports have been moved
+        // useful if the symbol has been Flipped or ports have been moved
         // partial routing will be done if this makes sense
         {issieModel with Sheet={issieModel.Sheet with Wire=BusWireSeparate.routeAndSeparateSymbolWires model compId}} |> withNoMsg
 

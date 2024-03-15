@@ -80,9 +80,9 @@ let rotateSymbol (rotation: Rotation) (sym: Symbol) : Symbol =
         let newComponent = { sym.Component with X = newPos.X; Y = newPos.Y}
 
         let newSTransform = 
-            match sym.STransform.flipped with
+            match sym.STransform.Flipped with
             | true -> 
-                {sym.STransform with Rotation = combineRotation (invertRotation rotation) sym.STransform.Rotation} // hack for rotating when flipped 
+                {sym.STransform with Rotation = combineRotation (invertRotation rotation) sym.STransform.Rotation} // hack for rotating when Flipped 
             | false -> 
                 {sym.STransform with Rotation = combineRotation rotation sym.STransform.Rotation}
         { sym with 
@@ -114,7 +114,7 @@ let flipSideHorizontal (edge: Edge) : Edge =
         |> rotateSide Degree180
     | _ -> edge
 
-/// Takes in a symbol and returns the same symbol flipped
+/// Takes in a symbol and returns the same symbol Flipped
 let flipSymbol (orientation: FlipType) (sym:Symbol) : Symbol =
     let portOrientation = 
         sym.PortMaps.Orientation |> Map.map (fun id side -> flipSideHorizontal side)
@@ -127,7 +127,7 @@ let flipSymbol (orientation: FlipType) (sym:Symbol) : Symbol =
         |> Map.map (fun edge order -> List.rev order)       
 
     let newSTransform = 
-        {flipped= not sym.STransform.flipped;
+        {Flipped= not sym.STransform.Flipped;
         Rotation= sym.STransform.Rotation} 
 
     { sym with

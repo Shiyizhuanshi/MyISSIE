@@ -325,11 +325,11 @@ let getBlock
     {TopLeft = {X = minX; Y = minY}; W = maxX-minX; H = maxY-minY}
 
 
-/// <summary>HLP 23: AUTHOR Ismagilov - Takes a point Pos, a centre Pos, and a rotation type and returns the point flipped about the centre</summary>
+/// <summary>HLP 23: AUTHOR Ismagilov - Takes a point Pos, a centre Pos, and a rotation type and returns the point Flipped about the centre</summary>
 /// <param name="point"> Original XYPos</param>
 /// <param name="center"> The center XYPos that the point is rotated about</param>
 /// <param name="rotation"> Clockwise or Anticlockwise </param>
-/// <returns>New flipped point</returns>
+/// <returns>New Flipped point</returns>
 let rotatePointAboutBlockCentre 
             (point:XYPos) 
             (centre:XYPos) 
@@ -353,11 +353,11 @@ let rotatePointAboutBlockCentre
     |> rotateAboutCentre
     |> relativeToTopLeft
 
-/// <summary>HLP 23: AUTHOR Ismagilov - Takes a point Pos, a centre Pos, and a flip type and returns the point flipped about the centre</summary>
+/// <summary>HLP 23: AUTHOR Ismagilov - Takes a point Pos, a centre Pos, and a flip type and returns the point Flipped about the centre</summary>
 /// <param name="point"> Original XYPos</param>
-/// <param name="center"> The center XYPos that the point is flipped about</param>
+/// <param name="center"> The center XYPos that the point is Flipped about</param>
 /// <param name="flip"> Horizontal or Vertical flip</param>
-/// <returns>New flipped point</returns>
+/// <returns>New Flipped point</returns>
 let flipPointAboutBlockCentre 
     (point:XYPos)
     (center:XYPos)
@@ -388,7 +388,7 @@ let adjustPosForBlockRotation
         | Degree270 -> { X = 0 ;Y = (float)w }
     pos - posOffset
 
-/// <summary>HLP 23: AUTHOR Ismagilov - Get the new top left of a symbol after it has been flipped</summary>
+/// <summary>HLP 23: AUTHOR Ismagilov - Get the new top left of a symbol after it has been Flipped</summary>
 /// <param name="flip">  Flipped horizontally or vertically</param>
 /// <param name="h"> Original height of symbol (Before flip)</param>
 /// <param name="w"> Original width of symbol (Before flip)</param>
@@ -424,7 +424,7 @@ let rotateSymbolInBlock
     let newComponent = { sym.Component with X = newTopLeft.X; Y = newTopLeft.Y}
     
     let newSTransform = 
-        match sym.STransform.flipped with
+        match sym.STransform.Flipped with
         | true -> 
             {sym.STransform with Rotation = combineRotation (invertRotation rotation) sym.STransform.Rotation}  
         | _-> 
@@ -442,8 +442,8 @@ let rotateSymbolInBlock
 /// <summary>HLP 23: AUTHOR Ismagilov - Flip a symbol horizontally or vertically in its block.</summary>
 /// <param name="flip">  Flip horizontally or vertically</param>
 /// <param name="block"> Bounding box of selected components</param>
-/// <param name="sym"> Symbol to be flipped</param>
-/// <returns>New symbol after flipped about block centre.</returns>
+/// <param name="sym"> Symbol to be Flipped</param>
+/// <returns>New symbol after Flipped about block centre.</returns>
 let flipSymbolInBlock
     (flip: FlipType)
     (blockCentre: XYPos)
@@ -466,7 +466,7 @@ let flipSymbolInBlock
         |> Map.map (fun edge order -> List.rev order)       
 
     let newSTransform = 
-        {flipped= not sym.STransform.flipped;
+        {Flipped= not sym.STransform.Flipped;
         Rotation= sym.STransform.Rotation} 
 
     let newcomponent = {sym.Component with X = newTopLeft.X; Y = newTopLeft.Y}
@@ -684,7 +684,7 @@ let groupNewSelectedSymsModel
 /// <param name="compList"> List of ComponentId's of selected components</param>
 /// <param name="model"> Current symbol model</param>
 /// <param name="flip"> Type of flip to do</param>
-/// <returns>New flipped symbol model</returns>
+/// <returns>New Flipped symbol model</returns>
 let flipBlock (compList:ComponentId list) (model:SymbolT.Model) (flip:FlipType) = 
     //Similar structure to rotateBlock, easy to understand
     let SelectedSymbols = List.map (fun x -> model.Symbols |> Map.find x) compList
@@ -735,7 +735,7 @@ let postUpdateScalingBox (model:SheetT.Model, cmd) =
                 |> makeRotateSym
             let rotateDeg270Sym = 
                 {makeButton (RotateButton Degree270) (topleft + rotateDeg270OffSet) 
-                    with SymbolT.STransform = {Rotation=Degree90 ; flipped=false}}
+                    with SymbolT.STransform = {Rotation=Degree90 ; Flipped=false}}
                 |> makeRotateSym
 
             let newSymbolMap = model.Wire.Symbol.Symbols 

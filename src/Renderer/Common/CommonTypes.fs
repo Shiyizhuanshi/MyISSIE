@@ -317,8 +317,8 @@ module CommonTypes
    
     type Rotation = | Degree0 | Degree90 | Degree180 | Degree270
     
-    /// Stores the rotation and the flip of the symbol, flipped false by default
-    type STransform = {Rotation: Rotation; flipped: bool}
+    /// Stores the rotation and the flip of the symbol, Flipped false by default
+    type STransform = {Rotation: Rotation; Flipped: bool}
     
     /// Represents the sides of a component
 
@@ -378,7 +378,7 @@ module CommonTypes
 
     let getSTransformWithDefault (infoOpt: SymbolInfo option) =
         match infoOpt with
-        | None ->{Rotation=Degree0; flipped=false}
+        | None ->{Rotation=Degree0; Flipped=false}
         | Some inf -> inf.STransform
 
 

@@ -172,7 +172,7 @@ module SymbolT =
             /// determines whetehr the symbol or its contents (it it is a custom component) contain any clo9cked logic.
             /// used to display a clokc symbol
             IsClocked: bool
-            /// determines whether symbol is rorated (in 90 degree increments) or flipped (reflected).
+            /// determines whether symbol is rorated (in 90 degree increments) or Flipped (reflected).
             STransform: STransform
             ReversedInputPorts: bool option
 

@@ -14,8 +14,8 @@
         /// Value is a bit arbitrary.
         let maxFirstProductArgSize = 1000
 
-        /// source of random numbers
-    let random = System.Random()
+        /// source of random numbers, using current time as seed
+    let random = System.Random(System.DateTime.Now.Millisecond)
 
     /// Fischer-Yates shuffle algorithm
     /// Returns a random shuffled array without changing the input array
@@ -59,26 +59,10 @@
         List.init g.Size g.Data
 
     /// return a shuffled range of integers
-    let randomInt (min:float) (step:float) (max:float) : Gen<float> =
+    let randomInt (min:int) (step:int) (max:int) : Gen<int> =
             [|min..step..max|]
             |> shuffleA
             |> fromArray
-
-    //return random value
-    let getRandomValue =
-        let random = System.Random()
-        fun () -> random.Next 4
-
-    //return random rotate degree
-    let randomRotateDegree randomValue=
-        match randomValue with
-        | 0 -> CommonTypes.Degree0
-        | 1 -> CommonTypes.Degree90
-        | 2 -> CommonTypes.Degree180
-        | 3 -> CommonTypes.Degree270
-        | _ -> failwith "Unexpected random integer for RotateDegree"
-
-
 
 //------------------------Combinators to transform and combine random sequences-----------------//
 

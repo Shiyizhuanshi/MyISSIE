@@ -441,7 +441,7 @@ module HLPTick3 =
         model
 
     let test2Func  (model: SheetT.Model) : SheetT.Model=
-        sheetAlignScale model
+        sheetAlignScale model []
         
     /// demo test circuit consisting of a DFF & And gate
     let makeTest1Circuit (andPos:XYPos) =
@@ -464,6 +464,18 @@ module HLPTick3 =
         |> separateAllWires
         |> test1Func
 
+    // let makeTest1Circuit (andPos:XYPos) =
+    //     initSheetModel
+    //     |> placeSymbol"A"(Input1 (1, None)) (middleOfSheet)
+    //     |> Result.bind (placeSymbol "C" (Output(1)) (middleOfSheet + {X= 200.; Y= -50.}))
+    //     |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= 0.; Y= 100.}))
+    //     |> Result.bind (placeSymbol "D" (Output(1)) (middleOfSheet + {X= 200.; Y= 150.}))
+    //     |> Result.bind (placeWire (portOf "A" 0) (portOf "C" 0))
+    //     |> Result.bind (placeWire (portOf "B" 0) (portOf "D" 0))
+    //     |> getOkOrFail
+    //     |> separateAllWires
+    //     |> test1Func
+
     let makeTest2Circuit (andPos:XYPos) =
         makeTest1Circuit {X=0.;Y=0.}
         |> test2Func
@@ -475,8 +487,7 @@ module HLPTick3 =
         |> placeSymbol"MUX"(Mux2) (middleOfSheet)
         // |> Result.bind (flipSymbol "MUX" SymbolT.FlipVertical)
         |> Result.bind (placeSymbol "A" (Input1 (1, None)) (middleOfSheet + {X= -400.; Y= -50.}))
-        // |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -50.; Y= -200.}))
-        |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -200.; Y= 200.}))
+        |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + {X= -50.; Y= 200.}))
         |> Result.bind (placeSymbol "C" (Output(1)) (middleOfSheet + {X= 200.; Y= -50.}))
         |> Result.bind (rotateSymbol "B" Degree90)
         // |> Result.bind (placeSymbol "B1" DFF (middleOfSheet + {X= 0.; Y= -100.}))
@@ -492,8 +503,7 @@ module HLPTick3 =
     let makeTest4Circuit (andPos:XYPos) =
         makeTest3Circuit {X=0.;Y=0.}
         |> test2Func
-        |> test2Func
-        |> test2Func
+        // |> test2Func
 
 
 //------------------------------------------------------------------------------------------------//

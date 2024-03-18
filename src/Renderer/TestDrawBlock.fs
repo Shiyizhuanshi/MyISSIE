@@ -17,9 +17,15 @@ open Elmish
 /// TODO: apply D1 etc. here
 let applyBeautifyAlgorithm (sheet: SheetT.Model) =
     // dummy sheet
-    SheetBeautifyD1.sheetAlignScale sheet [] 0
+    SheetBeautifyD1.sheetAlignScale sheet 3
     
 
+
+
+type SymbolPortInfo = {
+    compType: ComponentType
+    inPortCount: int ; outPortCount: int
+}
 //let getTestMetrics (sheet : SheetT.Model) : TestMetrics =
 //    {
 //        numSegments = sheet.Wire.Wires.Values
@@ -304,7 +310,7 @@ module HLPTick3 =
 
         /// Flip the symbol given by symLabel by an amount flip.
         /// Takes in a symbol label, a flip fixed amount, and a sheet containing the symbol.
-        /// Return the sheet with the Flipped symbol.
+        /// Return the sheet with the flipped symbol.
         let flipSymbol (symLabel: string) (flip: SymbolT.FlipType) (model: SheetT.Model) : (SheetT.Model) =
 
             let symbolsMap = model.Wire.Symbol.Symbols
@@ -315,8 +321,8 @@ module HLPTick3 =
 
             match getSymbol with
             | Ok symbol ->
-                let FlippedSymbol = SymbolResizeHelpers.flipSymbol flip symbol
-                let updatedSymbolsMap = Map.add symbol.Id FlippedSymbol symbolsMap
+                let flippedSymbol = SymbolResizeHelpers.flipSymbol flip symbol
+                let updatedSymbolsMap = Map.add symbol.Id flippedSymbol symbolsMap
                 { model with Wire = { model.Wire with Symbol = { model.Wire.Symbol with Symbols = updatedSymbolsMap } } }
 
             | _ -> model
@@ -351,7 +357,11 @@ module HLPTick3 =
                      model
                      |> Optic.set (busWireModel_ >-> BusWireT.wireOf_ newWire.WId) newWire
                      |> Ok
-            
+
+        let placeWireNoResult (source: SymbolPort) (target: SymbolPort) (model: SheetT.Model) : SheetT.Model=
+            match placeWire source target model with
+                | Ok m -> m
+                | Error e -> failwith e
 
         /// Run the global wire separation algorithm (should be after all wires have been placed and routed)
         let separateAllWires (model: SheetT.Model) : SheetT.Model =
@@ -383,8 +393,7 @@ module HLPTick3 =
             let result = sheetChecker sheetMaker optimizer
 
             // display result info
-            printf $"Test {result.TestName}: {result.TestDataCount} samples tested, {result.TestSucceededCount} passed, {result.TestErrors.Length} failed\n"
-            printf $"Succeeeds: {result.TestSucceededValues}\n"
+            printf $"[Tester] {result.TestName}:\n {result.TestDataCount} samples tested, {result.TestSucceededCount} passed, {result.TestErrors.Length} failed.\nSucceeeds: {result.TestSucceededValues}\n"
 
             result
 
@@ -469,6 +478,227 @@ module HLPTick3 =
         |> Result.bind (placeWire (portOf "main1" 1) (portOf "main2" 1))
         |> Result.bind (placeWire (portOf "main1" 2) (portOf "main2" 2))
         |> getOkOrFail
+
+
+
+    let generateSmallCircuitChunk (sheet : SheetT.Model) (inputPortCount : int) (outputPortCount : int) (centerPos : XYPos) (placeRange : XYPos) =
+        // a list of generatable symbols:
+        // input, output
+        // and, or, not, nand, nor, xor, xnor
+        // mux2, mux4, demux2, demux4
+        // dff, dffe
+
+        let symbolPortInfoList = [
+            //{ compType = Input1 (1, None) ; inPortCount = 0 ; outPortCount = 1 }
+            //{ compType = Output 1 ; inPortCount = 1 ; outPortCount = 0 }
+            { compType = GateN (And, 2) ; inPortCount = 2 ; outPortCount = 1 }
+            { compType = GateN (Or, 2) ; inPortCount = 2 ; outPortCount = 1 }
+            { compType = Not ; inPortCount = 1 ; outPortCount = 1 }
+            { compType = GateN (Nand, 2) ; inPortCount = 2 ; outPortCount = 1 }
+            { compType = GateN (Nor, 2) ; inPortCount = 2 ; outPortCount = 1 }
+            { compType = GateN (Xor, 2) ; inPortCount = 2 ; outPortCount = 1 }
+            { compType = GateN (Xnor, 2) ; inPortCount = 2 ; outPortCount = 1 }
+            { compType = Mux2 ; inPortCount = 3 ; outPortCount = 1 }
+            { compType = Mux4 ; inPortCount = 5 ; outPortCount = 1 }
+            { compType = DFF ; inPortCount = 2 ; outPortCount = 2 }
+            { compType = DFFE ; inPortCount = 3 ; outPortCount = 3 }
+        ]
+
+        // I think there might be a default function for this in Issie somewhere, so this part may be replaced
+        let GetDefaultSymbolLabel (compType: ComponentType) =
+            match compType with
+            | Input1 _ -> "Input"
+            | Output _ -> "Output"
+            | GateN (gateType, _) -> gateType.ToString()
+            | Not -> "Not"
+            | Mux2 -> "Mux"
+            | Mux4 -> "Mux"
+            | Demux2 -> "Demux"
+            | Demux4 -> "Demux"
+            | DFF -> "DFF"
+            | DFFE -> "DFF"
+
+        let GetNextPossibleSymbolLabel (currentSheet : SheetT.Model) (compType: ComponentType) =
+            let defaultLabel = GetDefaultSymbolLabel compType
+            let symbols = currentSheet.Wire.Symbol.Symbols.Values |> Seq.toList
+            let labels = List.map (fun (sym: SymbolT.Symbol) -> sym.Component.Label) symbols
+            let rec findNextLabel (label: string) (index: int) =
+                let nextLabel = label + index.ToString()
+                if labels |> List.exists (fun l -> l = nextLabel) then
+                    findNextLabel label (index + 1)
+                else
+                    nextLabel
+            findNextLabel defaultLabel 1
+
+        let rnd = System.Random()
+
+
+        let selectSymbolsToExactlyMeetPortCounts desiredInPortCount desiredOutPortCount symbolPortInfoList =
+            let rec select acc inPortCountRemaining outPortCountRemaining =
+                if inPortCountRemaining = 0 && outPortCountRemaining = 0 then acc
+                else
+                    // Filter symbols that do not exceed the remaining port requirements
+                    let suitableSymbols = 
+                        symbolPortInfoList
+                        |> List.filter (fun sym -> sym.inPortCount <= outPortCountRemaining && sym.outPortCount <= inPortCountRemaining)
+
+                    if List.isEmpty suitableSymbols then
+                        // If no suitable symbols are found, put input or output ports in the remaining ports
+                        if inPortCountRemaining > 0 then
+                            let inputSymbol = { compType = Input1 (1, None) ; inPortCount = 0 ; outPortCount = 1 }
+                            select (inputSymbol :: acc) 0 (outPortCountRemaining - 1)
+                        else
+                            let outputSymbol = { compType = Output 1 ; inPortCount = 1 ; outPortCount = 0 }
+                            select (outputSymbol :: acc) inPortCountRemaining 0
+
+                    else
+                        // Randomly select a suitable symbol
+                        let index = rnd.Next(List.length suitableSymbols)
+                        let selectedSymbol = suitableSymbols.[index]
+
+                        // Update remaining port counts
+                        let newInPortCountRemaining = inPortCountRemaining - selectedSymbol.outPortCount
+                        let newOutPortCountRemaining = outPortCountRemaining - selectedSymbol.inPortCount
+
+                        select (selectedSymbol :: acc) newInPortCountRemaining newOutPortCountRemaining
+
+            // Initial call to the recursive select function
+            select [] desiredInPortCount desiredOutPortCount
+
+
+        // Randomly select symbols to meet the input port count and their output ports
+        let symbolsForInputPorts = 
+            selectSymbolsToExactlyMeetPortCounts inputPortCount outputPortCount symbolPortInfoList
+
+        let symbolComponentTypes = List.map (fun spi -> spi.compType) symbolsForInputPorts
+
+        // print the selected symbols
+        printfn "Symbols for input ports: %A" symbolsForInputPorts
+        // get a list of symbol names for input and output ports
+        let inputSymbolNames = symbolsForInputPorts |> List.map (fun spi -> GetNextPossibleSymbolLabel initSheetModel spi.compType)
+
+        // randomly place the symbols
+        let getRandomPlacePosition (startPoint : XYPos) (endPoint : XYPos) (index : int) =
+            let x = randomInt (int startPoint.X) 5 (int endPoint.X)
+            let y = randomInt (int startPoint.Y) 5 (int endPoint.Y)
+            let randomPos = product (fun x y -> {X=float x; Y= float -y}) x y
+            randomPos.Data index + middleOfSheet
+
+       
+        // place the symbols
+        let placeSymbols (symbolNames: string list) (symbols: SymbolPortInfo list) (sheet: SheetT.Model) =
+            let rec placeSymbolsRec (symbolNames: string list) (symbols: SymbolPortInfo list) (sheet: SheetT.Model) =
+                match symbolNames, symbols with
+                | [], [] -> sheet
+                | name::nameTail, symbol::symbolTail ->
+                    let position = getRandomPlacePosition (centerPos - placeRange) (centerPos + placeRange) (rnd.Next(1000))    // random position
+                    let newSheet = placeSymbol name symbol.compType position sheet
+                    match newSheet with
+                    | Ok sheet -> placeSymbolsRec nameTail symbolTail sheet
+                    | Error e -> failwith e
+                | _ -> failwith "Symbol names and symbols lists are not the same length"
+            placeSymbolsRec symbolNames symbols sheet
+
+
+        sheet
+        |> placeSymbols inputSymbolNames symbolsForInputPorts
+
+
+    let autoPlaceMissingPortWires (sheet: SheetT.Model) =
+        let checkIfPortHasWire (port: Port) (model: SheetT.Model) =
+            let wires = model.Wire.Wires.Values |> Seq.toList
+            wires |> List.exists (fun wire -> wire.InputPort = InputPortId port.Id || wire.OutputPort = OutputPortId port.Id)
+
+        let getXYLength (pos: XYPos) =
+            let x = pos.X
+            let y = pos.Y
+            sqrt (x * x + y * y)
+
+        let getOptionValue (opt: 'a option) (defaultVal: 'a) =
+            match opt with
+            | Some x -> x
+            | None -> defaultVal
+
+        let findNearestSymbolWithMissingPort (sym: SymbolT.Symbol) (sheet: SheetT.Model) isInputPort =
+            let symbols = sheet.Wire.Symbol.Symbols.Values |> Seq.toList
+            // exclude the symbol itself
+            let symbolsExcludingSelf = List.filter (fun (s: SymbolT.Symbol) -> s.Id <> sym.Id) symbols
+
+            let symbolsWithMissingPorts =
+                symbolsExcludingSelf
+                |> List.map (fun s ->
+                    let missingPorts = 
+                        (if isInputPort then s.Component.InputPorts else s.Component.OutputPorts)
+                        |> List.filter (fun port -> not (checkIfPortHasWire port sheet))
+                    s, missingPorts)
+                |> List.filter (fun (_, ports) -> not (List.isEmpty ports))
+
+            // Check if there are any symbols with missing ports
+            if List.isEmpty symbolsWithMissingPorts then
+                None
+            else
+                let nearestSymbol, ports =
+                    symbolsWithMissingPorts
+                    |> List.minBy (fun (s, _) -> getXYLength (s.CentrePos - sym.CentrePos))
+
+                // Assuming all ports have a PortNumber; adjust logic as needed
+                match ports |> List.tryHead with
+                | Some port -> Some (nearestSymbol, getOptionValue port.PortNumber 0)
+                | None -> None
+
+        let symbols = sheet.Wire.Symbol.Symbols.Values |> Seq.toList
+
+        let rec autoPlaceMissingPortWiresRec (sheet: SheetT.Model) (symbols: SymbolT.Symbol list) =
+            match symbols with
+            | [] -> sheet
+            | symbol::symbolTail ->
+                let inputPortsMissingWires = symbol.Component.InputPorts |> List.filter (fun port -> not (checkIfPortHasWire port sheet))
+                let outputPortsMissingWires = symbol.Component.OutputPorts |> List.filter (fun port -> not (checkIfPortHasWire port sheet))
+
+                let result =
+                    try
+                        let sheetWithInputWires =
+                            inputPortsMissingWires
+                            |> List.fold (fun accSheet port -> 
+                                match findNearestSymbolWithMissingPort symbol accSheet false with
+                                | Some (nearestSymbol, portNum) ->
+                                    printf "Input: Placing wire from %s, port %d to symbol %s,port %d" symbol.Component.Label (getOptionValue port.PortNumber 0) nearestSymbol.Component.Label portNum
+                                    placeWireNoResult (portOf nearestSymbol.Component.Label portNum) (portOf symbol.Component.Label (getOptionValue port.PortNumber 0)) accSheet
+                                | None -> accSheet) sheet
+
+                        let sheetWithOutputWires =
+                            outputPortsMissingWires
+                            |> List.fold (fun accSheet port -> 
+                                match findNearestSymbolWithMissingPort symbol accSheet true with
+                                | Some (nearestSymbol, portNum) ->
+                                    printf " OutPlacing wire from %s, port %d to symbol %s,port %d" nearestSymbol.Component.Label portNum symbol.Component.Label (getOptionValue port.PortNumber 0)
+                                    placeWireNoResult (portOf symbol.Component.Label (getOptionValue port.PortNumber 0)) (portOf nearestSymbol.Component.Label portNum) accSheet
+                                | None -> accSheet) sheetWithInputWires
+
+                        Ok sheetWithOutputWires
+
+                    with
+                    | e -> Error (e.Message)
+
+                match result with
+                //autoPlaceMissingPortWiresRec sheetWithOutputWires symbolTail
+                | Ok sheet -> autoPlaceMissingPortWiresRec sheet symbolTail
+                | Error e -> sheet
+
+        autoPlaceMissingPortWiresRec sheet symbols
+
+
+
+    /// A circuit that can generate random symbols
+    let makeCircuitV5 (sampleNum : int) =
+        // generate a random number between 1 and 10
+        let rnd = System.Random()
+        let randomNum = rnd.Next(1, 10)
+
+        [0..randomNum-1]
+        |> List.map (fun index ->  {X=100.0 * (float) index; Y = 0.0})
+        |> List.fold (fun sheet pos -> generateSmallCircuitChunk sheet 8 8 pos {X=600.0; Y=300.0}) initSheetModel
+        |> autoPlaceMissingPortWires
 
 
     module Asserts =
@@ -570,6 +800,14 @@ module HLPTick3 =
             let testCircuit = makeCircuitA4 firstSample
             showSheetInIssieSchematic testCircuit dispatch
 
+        let showTestCircuit5 (testNum : int) (firstSample : int) (dispatch: Dispatch<Msg>) (sheet : SheetT.Model) =
+            let testCircuit = makeCircuitV5 firstSample
+            showSheetInIssieSchematic testCircuit dispatch
+
+        let autoPlaceWires (testNum : int) (firstSample : int) (dispatch: Dispatch<Msg>) (sheet : SheetT.Model) =
+            let testCircuitWithWires = autoPlaceMissingPortWires sheet
+            showSheetInIssieSchematic testCircuitWithWires dispatch
+
         let showOptimizedCircuit (testNum : int) (firstSample : int) (dispatch: Dispatch<Msg>) (sheet : SheetT.Model)=
             // get the current circuit on sheet
             let testCircuit = sheet
@@ -578,9 +816,9 @@ module HLPTick3 =
 
 
         /// check visible wires
-        let test1 (testNum : int) (firstSample : int) (dispatch: Dispatch<Msg>) (sheet : SheetT.Model) =
+        let test1 (testNum : int) (firstSample : int) (dispatch: Dispatch<Msg>) (sheet : SheetT.Model) sheetMaker =
             runTestOnSheets
-                makeAndGateCircuit_1
+                sheetMaker
                 applyBeautifyAlgorithm
                 Asserts.VisSegCountCheck
                 dispatch
@@ -588,13 +826,32 @@ module HLPTick3 =
 
 
         /// check for symbol overlap
-        let test2 testNum firstSample dispatch sheet =
+        let test2 testNum firstSample dispatch sheet sheetMaker =
             runTestOnSheets
-                makeAndGateCircuit_1
+                sheetMaker
                 applyBeautifyAlgorithm
                 Asserts.SymbolOverlap
                 dispatch
             |> recordPositionInTest testNum dispatch
+
+        let runAllTests testNum firstSample dispatch sheet =
+            //let testCircuitMaker = makeCircuitA3
+            //test1 testNum firstSample dispatch sheet testCircuitMaker
+            //test2 testNum firstSample dispatch sheet testCircuitMaker
+            //test3 testNum firstSample dispatch
+            //test4 testNum firstSample dispatch
+            //test5 testNum firstSample dispatch
+            let testCircuits = [
+                makeSinglyConnectedCircuit, "Singly Circuit";
+                makeAndGateCircuit_1, "And Gate Circuit";
+                makeCircuitA3, "Circuit A3";    
+                makeCircuitA4, "Circuit A4";
+                makeCircuitV5, "Random Circuits"]
+            testCircuits
+            |> List.iter (fun (testCircuitMaker, circuitName) ->
+                printf $"[Tester] Running test for: {circuitName}"
+                test1 testNum firstSample dispatch sheet testCircuitMaker
+                test2 testNum firstSample dispatch sheet testCircuitMaker)
 
         /// Example test: Horizontally positioned AND + DFF: fail on sample 10
         //let test2 testNum firstSample dispatch =
@@ -662,10 +919,10 @@ module HLPTick3 =
                 "Test Circuit 2", showTestCircuit2
                 "Test Circuit 3", showTestCircuit3
                 "Test Circuit 4", showTestCircuit4
-                "Test6", fun _ _ _ _-> printf "Test6"
-                "Test7", fun _ _ _ _-> printf "Test7"
+                "Test Circuit 5", showTestCircuit5
+                "Auto Place Wires", autoPlaceWires
                 "Test8", fun _ _ _ _-> printf "Test8"
-                "Next Test Error", fun _ _ _ _-> printf "Next Error:" // Go to the nexterror in a test
+                "Run Tests", runAllTests
 
             ]
 

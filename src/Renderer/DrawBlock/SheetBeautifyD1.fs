@@ -372,7 +372,7 @@ let isMovable (sym: Symbol) (portId: string) (parallelWirePortsLst : string list
     |> List.length = 1
 
 
-let rec sheetAlignScale (sheetModel: SheetT.Model) (stubbornWiresLst : ConnectionId list) (intersectSymPairCount : int)=
+let rec sheetAlignScaleOnce (sheetModel: SheetT.Model) (stubbornWiresLst : ConnectionId list) (intersectSymPairCount : int)=
     printfn "%s" "aligning and scaling start!"
     printfn "stubborn wires: %d" stubbornWiresLst.Length
     let parallelWiresLst = getParallelWiresLst sheetModel stubbornWiresLst
@@ -449,7 +449,7 @@ let rec sheetAlignScale (sheetModel: SheetT.Model) (stubbornWiresLst : Connectio
             match newSym with
             | None -> 
                 printfn "%s" "intersected symbols found, add new wire to stubbornWiresLst" 
-                sheetAlignScale sheetModel (wireToMove.WId::newStubbonWiresLst) (numOfIntersectedSymPairs sheetModel) 
+                sheetAlignScaleOnce sheetModel (wireToMove.WId::newStubbonWiresLst) (numOfIntersectedSymPairs sheetModel) 
             | Some newSym ->
                 let newWireModel = 
                     updateModelWires (updateModelSymbols sheetModel.Wire [newSym] ) [parallelWiresLst |> List.head]
@@ -464,5 +464,12 @@ let rec sheetAlignScale (sheetModel: SheetT.Model) (stubbornWiresLst : Connectio
                     |> SheetUpdateHelpers.updateBoundingBoxes // could optimise this by only updating symId bounding boxes
                 
                 printfn "%s" "straighten one wire, continue to align and scale"
-                sheetAlignScale newSheetModel newStubbonWiresLst (numOfIntersectedSymPairs newSheetModel)
+                sheetAlignScaleOnce newSheetModel newStubbonWiresLst (numOfIntersectedSymPairs newSheetModel)
                 // newSheetModel
+
+let rec sheetAlignScale (sheetModel: SheetT.Model) (runTimes : int)=
+    if runTimes = 0 then sheetModel
+    else
+        printfn "runTimes: %d" runTimes
+        let newSheetModel = sheetAlignScaleOnce sheetModel [] (numOfIntersectedSymPairs sheetModel)
+        sheetAlignScale newSheetModel (runTimes - 1)

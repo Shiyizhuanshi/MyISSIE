@@ -9,19 +9,19 @@ open SheetBeautifyHelpers
 open DrawModelType
 open Optics
 
-
 // this is the module for team phase work D1 
 
+/// Given a map, convert all map values to a list
 let mapValuesToList map = 
     map
     |> Helpers.mapValues
     |> Array.toList
 
-
+/// Given a XYPos, return the orientation of the segment
 let getOrientation (pos: XYPos): BusWireT.Orientation = 
     if pos.X = 0.0 then BusWireT.Vertical else BusWireT.Horizontal
 
-/// Given three visual (non-zero) segments, determine whether combine into a parallel wire
+/// Given a wireId, determine whether it is a parallel wire, if so, return the vector of the snd segment of the wire
 let isParallelWire (wireId: ConnectionId) (model: SheetT.Model): XYPos option= 
     let segsLst = SegmentHelpers.visibleSegments wireId model
     match segsLst.Length with
@@ -31,7 +31,7 @@ let isParallelWire (wireId: ConnectionId) (model: SheetT.Model): XYPos option=
                 | false -> None
         | _ -> None
 
-/// Given a symbol, turn how many wires are connected to it
+/// Given a symbol, return how many wires are connected to it
 let connectedWiresCount (sym: Symbol) (sheetModel: SheetT.Model): int = 
     let portsLst = 
         sym.PortMaps.Order 
@@ -51,72 +51,21 @@ let connectedWiresCount (sym: Symbol) (sheetModel: SheetT.Model): int =
 
     connectedWires.Length
 
-    
-
-let hasOnlyOnePort (sym: Symbol) : Edge option= 
-    let portMaps = sym.PortMaps.Order |> Map.toList
-    let portEdge = 
-        portMaps
-        |> List.tryFind (fun tuple -> tuple |> snd |> List.length = 1)
-        |> Option.map (fun tuple -> tuple |> fst)
-
-    match sym.Component.InputPorts.Length + sym.Component.OutputPorts.Length with
-    | 1 -> portEdge
-    | _ -> None
-
-
-let inputPortIdToString (inputPortId: InputPortId) =
-        match inputPortId with
-        | InputPortId str -> str
-
-let outputPortIdToString (outputPortId: OutputPortId) =
-        match outputPortId with
-        | OutputPortId str -> str
-
-let hasOnlyOneConnectedParallelWire (sheetModel: SheetT.Model) (sym: Symbol): XYPos option=
-    let parallelWiresLst = 
-        sheetModel.Wire.Wires 
-        |> mapValuesToList 
-        |> List.collect (fun wire -> 
-            match isParallelWire wire.WId sheetModel with
-                | Some seg -> [(wire, seg)]
-                | None -> [])
-
-    let wiresPortIds = 
-        parallelWiresLst
-        |> List.map fst
-        |> List.collect (fun wire -> [inputPortIdToString wire.InputPort; outputPortIdToString wire.OutputPort])
-    
-    let symPortIds = 
-        sym.PortMaps.Order
-        |> Map.toList
-        |> List.collect (fun tuple -> snd tuple)
-
-    let connectedPortCount = 
-        wiresPortIds
-        |> List.filter (fun  wirePortId -> List.exists (fun  symPortId-> wirePortId = symPortId )  symPortIds) 
-        |> List.length
-        
-    match connectedPortCount = 1 with
-    | true -> 
-        let connectedWire = 
-            parallelWiresLst
-            |> List.map fst
-            |> List.find (fun wire -> 
-                let wirePortIds = [inputPortIdToString wire.InputPort; outputPortIdToString wire.OutputPort]
-                List.exists (fun wirePortId -> List.exists (fun symPortId -> wirePortId = symPortId ) symPortIds ) wirePortIds )
-        Some (parallelWiresLst |> List.find (fun (wire, _) -> wire = connectedWire) |> snd)
-    | false -> None
+/// Given a XYPos, return the negative XYPos
 let negXYPos (pos: XYPos) : XYPos = {X = -pos.X; Y = -pos.Y}
+
 
 let getFstOfSndTuple (tuple : ('a * ('b * 'c))) = 
     match tuple with
     | (_, snd) -> fst snd
 
+
 let getSndOfSndTuple (tuple : ('a * ('b * 'c))) = 
     match tuple with
     | (_, snd') -> snd snd'
 
+
+/// Update one symbol with a given offset
 let updateOneSym (sym: Symbol) (sheetModel: SheetT.Model) ((offset, portType): (XYPos * PortType)) (intersectSymPairCount): Symbol option= 
     printfn "updating one sym with offset %s" (pXY offset)
     let newSym = 
@@ -134,7 +83,7 @@ let updateOneSym (sym: Symbol) (sheetModel: SheetT.Model) ((offset, portType): (
     | false -> Some newSym
     | _ -> None
 
-
+/// Find all wires that are parallel in a sheet which is not in the stubbornWiresLst 
 let getParallelWiresLst (sheetModel: SheetT.Model) (wiresCannotStraighten: ConnectionId list): BusWireT.Wire list= 
     sheetModel.Wire.Wires 
     |> mapValuesToList 
@@ -145,12 +94,14 @@ let getParallelWiresLst (sheetModel: SheetT.Model) (wiresCannotStraighten: Conne
     |> List.filter (fun wire -> 
         not (List.exists (fun wireCannotStraighten -> wire.WId = wireCannotStraighten) wiresCannotStraighten))
 
+/// Given a portId and a symbol, return the portType of the port
 let getPortType (portId: string) (sym: Symbol): PortType = 
     let port = 
         sym.Component.InputPorts @ sym.Component.OutputPorts
         |> List.find (fun port -> port.Id = portId)
     port.PortType
 
+/// Determine whether a symbol is movable
 let isMovable (sym: Symbol) (portId: string) (parallelWirePortsLst : string list): bool= 
     printfn "checking if the symbol %s is movable" (pXY sym.Pos)
     let edge = sym.PortMaps.Orientation[portId]
@@ -160,7 +111,167 @@ let isMovable (sym: Symbol) (portId: string) (parallelWirePortsLst : string list
     |> List.map (fun portId -> List.exists (fun parallelWirePortId -> parallelWirePortId = portId) parallelWirePortsLst)
     |> List.length = 1
 
+/// Given a symbol, return all the ports of the symbol
+let getSymPorts (sym: Symbol) =
+    sym.Component.InputPorts @ sym.Component.OutputPorts
+    |> List.map (fun port -> port.Id)
 
+/// Given two symbols, return the wires between them
+let getWiresBetweenTwoSymbol (sym1 : Symbol) (sym2 : Symbol) (sheetModel : SheetT.Model): BusWireT.Wire list = 
+    let sym1Ports = getSymPorts sym1
+    let sym2Ports = getSymPorts sym2
+    let wires = sheetModel.Wire.Wires |> mapValuesToList
+    wires
+    |> List.filter (fun wire -> 
+        let inputPortId =  wire.InputPort.ToString()
+        let outputPortId =  wire.OutputPort.ToString()
+        ((List.exists (fun portId -> portId = inputPortId) sym1Ports) && (List.exists (fun portId -> portId = outputPortId) sym2Ports)) ||
+        ((List.exists (fun portId -> portId = outputPortId) sym1Ports) && (List.exists (fun portId -> portId = inputPortId) sym2Ports)))
+
+
+/// Return true if the component type is custom
+let isCustomComponentType (componentType: ComponentType) =
+    match componentType with
+    | Custom customType -> true
+    | _ -> false
+
+/// Extract all Custom symbols from the sheetModel
+let getCustomSyms (sheetModel : SheetT.Model) : Symbol list = 
+    sheetModel.Wire.Symbol.Symbols
+    |> mapValuesToList
+    |> List.filter (fun sym -> isCustomComponentType sym.Component.Type)
+
+/// Choose which custom symbol to move
+let chooseCSymToMove (sym1 : Symbol) (edge1 : Edge) (sym2 : Symbol) (edge2 : Edge): Symbol =
+    let sym1Ports = sym1.PortMaps.Order.[edge1].Length
+    let sym2Ports = sym2.PortMaps.Order.[edge2].Length
+    if sym1Ports > sym2Ports 
+    then
+        printfn "sym to change dim : %s" sym2.Component.Label
+        sym2
+    else 
+        printfn "sym to change dim : %s" sym1.Component.Label
+        sym1
+
+
+/// Get the port gap of a custom symbol in certain edge
+let getPortGapOfCSym (sym : Symbol) (edge : Edge) : float = 
+    let gap = Symbol.getPortPosEdgeGap sym.Component.Type
+    let portDimension = float sym.PortMaps.Order.[edge].Length - 1.0
+    match edge with
+    | Left | Right -> sym.Component.H / (portDimension + 2.0 * gap)
+    | Top | Bottom -> sym.Component.W / (portDimension + 2.0 * gap)
+    | _ -> failwith "not implement yet"
+
+
+/// Given destred port gap, calculate the dimension of the custom symbol
+let calculateDimension (sym : Symbol) (edge : Edge) (desiredPortGap : float) : XYPos = 
+    let portDimension = float sym.PortMaps.Order.[edge].Length - 1.0
+    let gap = Symbol.getPortPosEdgeGap sym.Component.Type
+    let h = 
+        match edge with
+        | Left -> desiredPortGap * (portDimension + 2.0 * gap)
+        | Right -> desiredPortGap * (portDimension + 2.0 * gap)
+        | _ -> 
+            printfn "top or bottom side are not implement yet"
+            sym.Component.H
+    {X = sym.Component.W; Y = h}
+
+/// Move custom symbols whose dimension was changed, to straighten the wire
+let moveCSym (wires : BusWireT.Wire list) (sheetModel : SheetT.Model): SheetT.Model =
+    let wiresInfo = 
+        wires
+        |> List.collect (fun wire -> 
+            match isParallelWire wire.WId sheetModel with
+            | Some offset -> [wire, offset]
+            | None -> [])
+
+    let symsToMove = 
+        wiresInfo
+        |> List.map (fun (wire, offset) -> getSourceSymbol sheetModel.Wire wire, offset)
+        |> List.distinct
+    
+    let newSyms =
+        symsToMove
+        |> List.map (fun (sym, offset) -> 
+            let newSym = moveSymbol offset sym
+            newSym)
+    
+    let newWireModel =
+        updateModelWires (updateModelSymbols sheetModel.Wire newSyms) []
+        |> BusWireSeparate.updateWireSegmentJumpsAndSeparations []
+
+    let newWireModel' =
+        BusWireRoute.updateWires newWireModel (newSyms |> List.map (fun sym -> sym.Id)) {X = 0.0; Y = 0.0}
+    
+    let newSheetModel =
+        sheetModel
+        |> Optic.set SheetT.wire_ (newWireModel')
+        |> SheetUpdateHelpers.updateBoundingBoxes
+    
+    newSheetModel
+
+/// Modify custom symbols' scale and position to straighten wires
+let alignCSyms (sheetModel : SheetT.Model) : SheetT.Model= 
+    printfn "aligning custom symbols................"
+    let cSyms = getCustomSyms sheetModel
+    let cSymPairs =  cSyms |> List.pairwise
+    let cSymPairsToAlign = 
+        cSymPairs
+        |> List.filter (fun (sym1, sym2) -> 
+            let wires = getWiresBetweenTwoSymbol sym1 sym2 sheetModel
+            let parallelWires = wires |> List.filter (fun wire -> isParallelWire wire.WId sheetModel |> Option.isSome)
+            // we can have at most 1 straight wire between two symbols
+            wires.Length - parallelWires.Length < 2)
+
+    let cSymPairsToAlignInfo = 
+        cSymPairsToAlign
+        |> List.map (fun (sym1,sym2) -> 
+            let wires = getWiresBetweenTwoSymbol sym1 sym2 sheetModel
+            let wire = wires |> List.head
+            let sourceSym = getSourceSymbol sheetModel.Wire wires.[0]
+            let targetSym = getTargetSymbol sheetModel.Wire wires.[0]
+
+            let (sourceEdge, targetEdge) = (sourceSym.PortMaps.Orientation.[wire.OutputPort.ToString()], targetSym.PortMaps.Orientation.[wire.InputPort.ToString()])
+
+            if chooseCSymToMove sourceSym sourceEdge targetSym targetEdge = sourceSym then
+                let desiredPortGap = getPortGapOfCSym targetSym targetEdge
+                let dimension = calculateDimension sourceSym sourceEdge desiredPortGap
+                (sourceSym, dimension, wire)
+            else
+                let desiredPortGap = getPortGapOfCSym sourceSym sourceEdge
+                let dimension = calculateDimension targetSym targetEdge desiredPortGap
+                (targetSym, dimension, wire))
+
+    let newCSyms = 
+        cSymPairsToAlignInfo
+        |> List.map (fun (sym, dimension, wire) -> putCustomCompDims dimension sym)
+
+    let wiresToStraighten = 
+        cSymPairsToAlignInfo
+        |> List.map (fun (sym, dimension, wire) -> wire)
+
+    let newCsymIds = 
+        newCSyms
+        |> List.map (fun sym -> sym.Id)
+
+    let newWireModel = 
+        updateModelWires (updateModelSymbols sheetModel.Wire newCSyms ) []
+        |> BusWireSeparate.updateWireSegmentJumpsAndSeparations [] 
+
+    let newWireModel' = 
+        BusWireRoute.updateWires newWireModel newCsymIds { X = 0.0; Y = 0.0 } 
+
+    let newSheetModel = 
+        sheetModel
+        |> Optic.set SheetT.wire_ (newWireModel')
+        |> SheetUpdateHelpers.updateBoundingBoxes // could optimise this by only updating symId bounding boxes
+
+    newSheetModel
+    |> moveCSym wiresToStraighten
+
+
+/// Straighten parallel wires in the sheetModel, once
 let rec sheetAlignScaleOnce (sheetModel: SheetT.Model) (stubbornWiresLst : ConnectionId list) (intersectSymPairCount : int)=
     printfn "%s" "aligning and scaling start!"
     printfn "stubborn wires: %d" stubbornWiresLst.Length
@@ -173,24 +284,27 @@ let rec sheetAlignScaleOnce (sheetModel: SheetT.Model) (stubbornWiresLst : Conne
         printfn "intersected symbols found: %d" (numOfIntersectedSymPairs sheetModel)
         sheetModel
     | _ ->
-
         let parallelWirePortsLst=
             parallelWiresLst
-            |> List.collect (fun (wire: BusWireT.Wire) -> [inputPortIdToString wire.InputPort; outputPortIdToString wire.OutputPort])
+            |> List.collect (fun (wire: BusWireT.Wire) -> [wire.InputPort.ToString(); wire.OutputPort.ToString()])
         
+        // filter out the wires that are not movable
         let newNotMovableWires = 
             parallelWiresLst
             |> List.filter (fun wire -> 
                 let sourceSym = getSourceSymbol sheetModel.Wire wire
                 let targetSym = getTargetSymbol sheetModel.Wire wire
-                let inputPortId = inputPortIdToString wire.InputPort
-                let outputPortId = outputPortIdToString wire.OutputPort
+                let inputPortId =  wire.InputPort.ToString()
+                let outputPortId =  wire.OutputPort.ToString()
                 not (isMovable sourceSym outputPortId parallelWirePortsLst || isMovable targetSym inputPortId parallelWirePortsLst))
             |> List.map (fun wire -> wire.WId)
+
+        // update the stubbornWiresLst
         let newStubbonWiresLst = 
             stubbornWiresLst @ newNotMovableWires
             |> List.distinct
 
+        // Given a wire, return how many wires are connected to the source and target symbols of the wire
         let getRelateWiresCount (wire : BusWireT.Wire) : int =
             connectedWiresCount (getSourceSymbol sheetModel.Wire wire) sheetModel
             + connectedWiresCount (getTargetSymbol sheetModel.Wire wire) sheetModel
@@ -201,7 +315,7 @@ let rec sheetAlignScaleOnce (sheetModel: SheetT.Model) (stubbornWiresLst : Conne
             |> List.filter (fun wire -> not (List.contains wire.WId newNotMovableWires))
             |> List.map (fun wire -> (wire, getRelateWiresCount wire))
             |> List.sortByDescending snd
-            |> List.tryHead
+            |> List.tryHead // move the wire that has the most connected wires
             |> Option.map fst
 
         match wireToStraighten with
@@ -215,7 +329,7 @@ let rec sheetAlignScaleOnce (sheetModel: SheetT.Model) (stubbornWiresLst : Conne
             let sourceSym = getSourceSymbol sheetModel.Wire wireToMove
             let targetSym = getTargetSymbol sheetModel.Wire wireToMove
             let moveInfo = 
-                match isMovable sourceSym (outputPortIdToString wireToMove.OutputPort) parallelWirePortsLst, isMovable targetSym (inputPortIdToString wireToMove.InputPort) parallelWirePortsLst with
+                match isMovable sourceSym (wireToMove.OutputPort.ToString()) parallelWirePortsLst, isMovable targetSym (wireToMove.InputPort.ToString()) parallelWirePortsLst with
                 | true, false -> [sourceSym, (PortType.Output, offset)]
                 | false, true -> [targetSym, (PortType.Input, offset)]
                 | true, true -> 
@@ -250,84 +364,16 @@ let rec sheetAlignScaleOnce (sheetModel: SheetT.Model) (stubbornWiresLst : Conne
                 let newSheetModel = 
                     sheetModel
                     |> Optic.set SheetT.wire_ (newWireModel')
-                    |> SheetUpdateHelpers.updateBoundingBoxes // could optimise this by only updating symId bounding boxes
+                    |> SheetUpdateHelpers.updateBoundingBoxes
                 
                 printfn "%s" "straighten one wire, continue to align and scale"
                 sheetAlignScaleOnce newSheetModel newStubbonWiresLst (numOfIntersectedSymPairs newSheetModel)
-                // newSheetModel
 
+/// Straighten parallel wires in the sheetModel, multiple times
 let rec sheetAlignScale (sheetModel: SheetT.Model) (runTimes : int)=
-    if runTimes = 0 then sheetModel
+    let newSheet = alignCSyms sheetModel
+    if runTimes = 0 then alignCSyms newSheet
     else
         printfn "runTimes: %d" runTimes
-        let newSheetModel = sheetAlignScaleOnce sheetModel [] (numOfIntersectedSymPairs sheetModel)
+        let newSheetModel = sheetAlignScaleOnce newSheet [] (numOfIntersectedSymPairs newSheet)
         sheetAlignScale newSheetModel (runTimes - 1)
-
-
-let getSymPorts (sym: Symbol) =
-    sym.Component.InputPorts @ sym.Component.OutputPorts
-
-let getWiresBetweenTwoSymbol (sym1 : Symbol) (sym2 : Symbol) (sheetModel : SheetT.Model): BusWireT.Wire list = 
-    let sym1Ports = getSymPorts sym1
-    let sym2Ports = getSymPorts sym2
-    let wires = sheetModel.Wire.Wires |> mapValuesToList
-    wires
-    |> List.filter (fun wire -> 
-        let inputPortId = inputPortIdToString wire.InputPort
-        let outputPortId = outputPortIdToString wire.OutputPort
-        ((List.exists (fun (port: Port) -> port.Id.ToString() = inputPortId) sym1Ports) && (List.exists (fun (port: Port) -> port.Id.ToString() = outputPortId) sym2Ports)) ||
-        ((List.exists (fun (port: Port) -> port.Id.ToString() = outputPortId) sym1Ports) && (List.exists (fun (port: Port) -> port.Id.ToString() = inputPortId) sym2Ports)))
-
-let isCustomWithType (componentType: ComponentType) =
-    match componentType with
-    | Custom customType -> true
-    | _ -> false
-
-let getCustomSyms (sheetModel : SheetT.Model) : Symbol list = 
-    sheetModel.Wire.Symbol.Symbols
-    |> mapValuesToList
-    |> List.filter (fun sym -> isCustomWithType sym.Component.Type)
-
-let findPortSymLabel (port : Port) (sheetModel : SheetT.Model) : string = 
-    let syms = sheetModel.Wire.Symbol.Symbols |> mapValuesToList
-    let sym = 
-        syms
-        |> List.find (fun sym -> sym.Id.ToString() = port.HostId)
-    sym.Component.Label
-
-
-let calculateDimension (portGap : float) (portDimension : float) (gap : float) (sym : Symbol) : XYPos = 
-    let h = portGap * (portDimension + 2.0 * gap)
-    {X = sym.Component.W; Y = h}
-
-
-
-let printOutPortPositions (sheetModel : SheetT.Model) : SheetT.Model = 
-    let wireLst = sheetModel.Wire.Wires |> mapValuesToList
-    let wirePortsLst = wireLst |> List.collect (fun wire -> [inputPortIdToString wire.InputPort; outputPortIdToString wire.OutputPort])
-    let syms = getCustomSyms sheetModel
-    let sym1 = syms |> List.head
-    let sym2 = syms |> List.tail |> List.head
-    syms
-    |> List.iter (fun sym -> printfn "symbol dim: %s pos: %s"  (pXY (getCustomCompDims sym)) (pXY sym.Pos))
-    syms
-    |> List.collect (fun sym ->  getSymPorts sym)
-    |> List.filter (fun port -> List.exists (fun wirePort -> wirePort = port.Id) wirePortsLst)
-    |> List.map (fun port -> port, findPortSymLabel port sheetModel)
-    |> List.iter (fun (port, label) -> printfn "label %s position: %s" label (pXY (getPortPos port.Id sheetModel.Wire.Symbol)))
-    syms
-    |> List.pairwise
-    |> List.iter (fun (sym1, sym2) -> 
-        let wires = getWiresBetweenTwoSymbol sym1 sym2 sheetModel
-        printfn "wires between %s and %s: %d" sym1.Component.Label sym2.Component.Label wires.Length)
-
-    let leftPortDimension = float sym1.PortMaps.Order[Right].Length - 1.0
-    let rightPortDimension = float sym2.PortMaps.Order[Left].Length - 1.0
-    let lefth, leftw = Symbol.getRotatedHAndW sym1
-    let righth, rightw = Symbol.getRotatedHAndW sym2
-    let gap = Symbol.getPortPosEdgeGap sym1.Component.Type
-
-    printfn "left port gap: %f" (lefth / (leftPortDimension + 2.0 * gap))
-    printfn "right port gap: %f" (righth / (rightPortDimension + 2.0 * gap))
-    sheetModel
-

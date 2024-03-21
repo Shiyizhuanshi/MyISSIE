@@ -16,8 +16,8 @@ open Elmish
 
 /// TODO: apply D1 etc. here
 let applyBeautifyAlgorithm (sheet: SheetT.Model) =
-    // dummy sheet
-    SheetBeautifyD1.sheetAlignScale sheet 3
+    // SheetBeautifyD1.sheetAlignScale sheet 3
+    SheetBeautifyD1.printOutPortPositions sheet
     
 
 

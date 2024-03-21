@@ -272,14 +272,14 @@ let alignCSyms (sheetModel : SheetT.Model) : SheetT.Model=
 
 
 /// Straighten parallel wires in the sheetModel, once
-let rec sheetAlignScaleOnce (sheetModel: SheetT.Model) (stubbornWiresLst : ConnectionId list) (intersectSymPairCount : int)=
+let rec sheetAlignScaleOnce (sheetModel: SheetT.Model) (stubbornWiresLst : ConnectionId list) (intersectSymPairCount : int) (runtime : int)=
     printfn "%s" "aligning and scaling start!"
     printfn "stubborn wires: %d" stubbornWiresLst.Length
     let parallelWiresLst = getParallelWiresLst sheetModel stubbornWiresLst
     printfn "parallel wires: %d" parallelWiresLst.Length
     // if there is no parallel wire, return the original sheetModel
-    match parallelWiresLst.Length with
-    | 0 -> 
+    match parallelWiresLst.Length, runtime with
+    | 0, _ | _, 500 -> 
         printfn "no parallel wire found, aligning and scaling finished"
         printfn "intersected symbols found: %d" (numOfIntersectedSymPairs sheetModel)
         sheetModel
@@ -352,7 +352,7 @@ let rec sheetAlignScaleOnce (sheetModel: SheetT.Model) (stubbornWiresLst : Conne
             match newSym with
             | None -> 
                 printfn "%s" "intersected symbols found, add new wire to stubbornWiresLst" 
-                sheetAlignScaleOnce sheetModel (wireToMove.WId::newStubbonWiresLst) (numOfIntersectedSymPairs sheetModel) 
+                sheetAlignScaleOnce sheetModel (wireToMove.WId::newStubbonWiresLst) (numOfIntersectedSymPairs sheetModel) runtime
             | Some newSym ->
                 let newWireModel = 
                     updateModelWires (updateModelSymbols sheetModel.Wire [newSym] ) [parallelWiresLst |> List.head]
@@ -367,7 +367,7 @@ let rec sheetAlignScaleOnce (sheetModel: SheetT.Model) (stubbornWiresLst : Conne
                     |> SheetUpdateHelpers.updateBoundingBoxes
                 
                 printfn "%s" "straighten one wire, continue to align and scale"
-                sheetAlignScaleOnce newSheetModel newStubbonWiresLst (numOfIntersectedSymPairs newSheetModel)
+                sheetAlignScaleOnce newSheetModel newStubbonWiresLst (numOfIntersectedSymPairs newSheetModel) runtime
 
 /// Straighten parallel wires in the sheetModel, multiple times
 let rec sheetAlignScale (sheetModel: SheetT.Model) (runTimes : int)=
@@ -375,5 +375,5 @@ let rec sheetAlignScale (sheetModel: SheetT.Model) (runTimes : int)=
     if runTimes = 0 then alignCSyms newSheet
     else
         printfn "runTimes: %d" runTimes
-        let newSheetModel = sheetAlignScaleOnce newSheet [] (numOfIntersectedSymPairs newSheet)
+        let newSheetModel = sheetAlignScaleOnce newSheet [] (numOfIntersectedSymPairs newSheet) 0
         sheetAlignScale newSheetModel (runTimes - 1)
